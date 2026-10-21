@@ -19,6 +19,14 @@
   <div class="row" id="swatches"></div>
   <figure id="fig"><img id="img" src="photo.png" data-diffmap alt=""><figcaption id="cap">Text over image</figcaption></figure>
   <div class="dark" id="dark">Light text on dark</div>
+  <!-- An exact no-op blend layer over the whole page (|x − 0| = x). Browsers drop subpixel (ClearType)
+       text antialiasing under blend layers; keeping one here at all times makes the "before" and
+       "after" screenshots draw text the same way, so the test measures diffmap, not text rendering. -->
+  <script>
+    // WebKitGTK can't blend fixed layers (see README), and it has no ClearType to protect anyway
+    if (!(/AppleWebKit/.test(navigator.userAgent) && /X11|Linux/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)))
+      document.body.insertAdjacentHTML('beforeend', '<div style="position:fixed;inset:0;background:#000;mix-blend-mode:difference;pointer-events:none;z-index:1"></div>');
+  </script>
 <script>
   // corners + a few in-betweens
   const cols = ['#000000','#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff','#ffffff',
