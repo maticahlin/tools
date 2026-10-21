@@ -31,7 +31,8 @@
   } else {
     window.__dm = diffmap({
       palette: { mode: 'swap', colors: ['#ff1408', '#ffffff'] },
-      cursor: { text: q.get('label') || 'Vrtec Ljubljana', font: `700 ${px}px Arial, Helvetica, sans-serif` },
+      // starts empty, like a hover label: the text comes from the tile's data-diffmap-text
+      cursor: { text: '', font: `700 ${px}px Arial, Helvetica, sans-serif` },
       force: true, ease: 1, grow: false, transition: 0, colorSpace: q.get('space') || 'srgb',
     });
     window.__move = (x, y) => {

@@ -381,7 +381,8 @@ function textShape(cursor, { mkLayer, move, space, kick = () => {} }) {
   // goes live together with the new bitmaps, so a label change never shows mismatched layers.
   let shown = null, urls = [], bakeGen = 0;
   function bake() {
-    if (!glyphs || !fb) { shown = null; kick(); return; }
+    // async on purpose: with an empty label this runs during startup, before the frame loop exists
+    if (!glyphs || !fb) { shown = null; queueMicrotask(kick); return; }
     const p = plan(fb);
     const g = glyphs, my = ++bakeGen;
     const { cov, w, h } = g;
