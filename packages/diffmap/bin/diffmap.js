@@ -28,7 +28,7 @@ for (let i = 0; i < argv.length; i++) {
   if (!a.startsWith('--')) { (flags._ ??= []).push(a); continue; }
   const [k, inline] = a.slice(2).split('=');
   if (inline !== undefined) flags[k] = inline;
-  else if (argv[i + 1] && !argv[i + 1].startsWith('--')) flags[k] = argv[++i];
+  else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) flags[k] = argv[++i];
   else flags[k] = true;
 }
 const OUT = path.resolve(flags.out ?? 'diffmap.config.json');
@@ -52,6 +52,7 @@ Palette flags (any of these skips the browser)
   --nodes '<json>'                  e.g. '{"red":"#ffd400","white":"#141414"}'  (unset nodes stay inverted)
   --anchors "<text>,<background>"   your site's main text and background colors (land exactly)
   --duotone "<dark>,<light>"        two-color ramp instead of the node map
+  --swap "<color>,<color>"          two colors trade places exactly (e.g. brand red and white)
   --size <px> --grow <px> --edge <px> --ease <0.05-1>
 
 Cursor shape (default: circle)
@@ -67,7 +68,7 @@ Other
   },
 
   async setup() {
-    const direct = ['preset', 'nodes', 'anchors', 'duotone', 'text', 'image', 'circle'].some((k) => k in flags);
+    const direct = ['preset', 'nodes', 'anchors', 'duotone', 'swap', 'text', 'image', 'circle'].some((k) => k in flags);
     if (direct) {
       const cfg = buildConfig(readConfig() ?? {});
       writeConfig(cfg);
@@ -114,7 +115,7 @@ function writeConfig(cfg) {
 }
 
 function hexList(s, n, what) {
-  const parts = String(s).split(',').map((x) => x.trim()).filter(Boolean);
+  const parts = String(s).split(/,(?![^(]*\))/).map((x) => x.trim()).filter(Boolean); // commas outside rgb()
   if (parts.length !== n) die(`${what} needs ${n} comma-separated colors, got "${s}"`);
   return parts.map((x) => { try { return toHex(parseColor(x)); } catch (e) { die(e.message.replace('diffmap: ', '')); } });
 }
@@ -123,6 +124,7 @@ function buildConfig(base) {
   const cfg = { size: 36, grow: { size: 96 }, ease: 0.2, ...base };
   let pal = { mode: 'difference', ...(base.palette ?? {}) };
   if (flags.duotone) pal = { mode: 'duotone', stops: hexList(flags.duotone, 2, '--duotone') };
+  if (flags.swap) pal = { mode: 'swap', colors: hexList(flags.swap, 2, '--swap') };
   if (flags.preset) {
     const p = PRESETS[String(flags.preset).toLowerCase()];
     if (!p) die(`unknown preset "${flags.preset}". Try: ${Object.keys(PRESETS).join(', ')}`);
@@ -139,9 +141,9 @@ function buildConfig(base) {
     pal.nodes = Object.fromEntries(CORNERS.map((k) => [k, toHex(parseColor(pal.nodes?.[k] ?? PRESETS.classic[k]))]));
     pal.anchors ??= ['#111111', '#ffffff'];
     delete pal.stops;
-  } else { delete pal.nodes; delete pal.anchors; }
+  } else { delete pal.nodes; delete pal.anchors; if (pal.mode !== 'swap') delete pal.colors; if (pal.mode !== 'duotone') delete pal.stops; }
   cfg.palette = pal;
-  if (flags.text) cfg.cursor = { text: String(flags.text), font: flags.font ?? '700 120px Arial, Helvetica, sans-serif' };
+  if ('text' in flags) cfg.cursor = { text: flags.text === true ? '' : String(flags.text), font: flags.font ?? '700 120px Arial, Helvetica, sans-serif' };
   if (flags.image) cfg.cursor = { image: String(flags.image), width: Number(flags.width ?? 260) };
   if (flags.circle) delete cfg.cursor;
   if (flags.edge) cfg.edge = Number(flags.edge);
@@ -154,6 +156,11 @@ function buildConfig(base) {
 function analyse(cfg) {
   const r = resolvePalette(cfg.palette ?? {});
   if (r.duotone) return { mode: 'duotone', text: 'exact', images: 'exact', other: 'exact', layers: r.layers.length };
+  if (cfg.palette.mode === 'swap') {
+    const [c1, c2] = cfg.palette.colors.map(parseColor);
+    const off = (x, y) => Math.round(Math.max(...applyFallback(r.fallback, x).map((v, i) => Math.abs(v - y[i]))) * 255);
+    return { mode: 'swap', colors: cfg.palette.colors, offBy: [off(c1, c2), off(c2, c1)], layers: r.layers.length };
+  }
   const lv = (x) => Math.round(x * 255);
   const anchors = (cfg.palette.anchors ?? []).map((a) => {
     const c = parseColor(a);
@@ -180,6 +187,12 @@ function report(cfg, { saved }) {
   const rel = path.relative(process.cwd(), OUT) || OUT;
   console.log(saved ? `Saved ${rel}` : `Checked ${rel}`);
   if (a.mode === 'duotone') { console.log('  duotone: exact in every browser, on text, images and video.'); return; }
+  if (a.mode === 'swap') {
+    console.log(`  ${a.colors[0]} → ${a.colors[1]}: ${a.offBy[0] <= 1 ? 'exact' : `off by ${a.offBy[0]} levels`}`);
+    console.log(`  ${a.colors[1]} → ${a.colors[0]}: ${a.offBy[1] <= 1 ? 'exact' : `off by ${a.offBy[1]} levels`}`);
+    console.log(`  ${a.layers} blend layers, every browser`);
+    return;
+  }
   for (const an of a.anchors) console.log(`  site color ${an.color}: ${an.offBy <= 1 ? 'exact' : `off by ${an.offBy} levels`}`);
   console.log(`  images and video: ${a.imagesOffBy <= 1 ? 'exact' : a.imagesOffBy <= 12 ? `within ${a.imagesOffBy} levels (not visible)` : `off by up to ${a.imagesOffBy} levels (nodes outside the black/white range)`}`);
   console.log(`  plain page colors: ${a.pageMisses.length ? `${a.pageMisses.join(', ')} can't take their node color there (images and video still do)` : 'follow every node'}`);

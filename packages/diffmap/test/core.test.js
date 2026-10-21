@@ -18,6 +18,9 @@ const BLEND = {
   multiply: (b, s) => b.map((v, i) => v * s[i]),
   difference: (b, s) => b.map((v, i) => Math.abs(v - s[i])),
   color: (b, s) => setLum(s, lum(b)),
+  lighten: (b, s) => b.map((v, i) => Math.max(v, s[i])),
+  darken: (b, s) => b.map((v, i) => Math.min(v, s[i])),
+  'color-dodge': (b, s) => b.map((v, i) => (v === 0 ? 0 : s[i] >= 1 ? 1 : Math.min(1, v / (1 - s[i])))),
 };
 const composite = (backdrop, stack) =>
   stack.reduce((b, { blend, color }) => BLEND[blend](b, parseColor(color)), backdrop);
@@ -137,6 +140,71 @@ test('soft edge: layer colors are linear in t between breaks, so CSS gradients a
       const a = layersAt(fb, hi), b = layersAt(fb, lo);
       const mid = (hi + lo) / 2, c = layersAt(fb, mid);
       c.forEach((col, L) => col.forEach((v, i) => assert.ok(Math.abs(v - (a[L][i] + b[L][i]) / 2) < 1e-6)));
+    }
+  }
+});
+
+
+import { kindOf, CLAMPED, AFFINE } from '../src/core.js';
+const runStack = (fb, t, c) => {
+  const kind = kindOf(fb), blends = kind === 'affine' ? AFFINE : CLAMPED;
+  return layersAt(fb, t, kind).reduce((b, col, L) => BLEND[blends[L]](b, col), c);
+};
+
+test('clamped fallback: 8-layer stack computes clamp(a + d·x) for any a, d', () => {
+  for (let k = 0; k < 2000; k++) {
+    const a = [0, 1, 2].map(() => (rand() - 0.5) * 6), d = [0, 1, 2].map(() => (rand() - 0.5) * 8);
+    const fb = { a, d };
+    const c = rcolor();
+    const want = applyFallback(fb, c);
+    runStack(fb, 1, c).forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-9, `${a} ${d} ${c}: ${v} vs ${want[i]}`));
+  }
+});
+
+test('clamped fallback: soft edge stays between the page and the full effect', () => {
+  for (let k = 0; k < 2000; k++) {
+    const fb = { a: [0, 1, 2].map(() => (rand() - 0.5) * 4), d: [0, 1, 2].map(() => (rand() - 0.5) * 6) };
+    const c = rcolor(), t = rand(), full = applyFallback(fb, c);
+    runStack(fb, t, c).forEach((v, i) => {
+      const lo = Math.min(c[i], full[i]), hi = Math.max(c[i], full[i]);
+      assert.ok(v > lo - 1e-9 && v < hi + 1e-9);
+    });
+    // and t = 0 is the identity
+    runStack(fb, 0, c).forEach((v, i) => assert.ok(Math.abs(v - c[i]) < 1e-12));
+  }
+});
+
+test('swap mode: brand red and white trade places exactly, through 8-bit layer colors', () => {
+  for (const [c1, c2] of [['#ff1408', '#ffffff'], ['#e30613', '#ffffff'], ['#0047ff', '#f2efe8'], ['#111111', '#ffd400']]) {
+    const r = resolvePalette({ mode: 'swap', colors: [c1, c2] });
+    const run = (c) => r.layers.reduce((b, { blend, color }) => BLEND[blend](b, parseColor(color)), parseColor(c));
+    const lv = (x, y) => Math.max(...x.map((v, i) => Math.abs(v - y[i]))) * 255;
+    assert.ok(lv(run(c1), parseColor(c2)) <= 1.01, `${c1} → ${run(c1).map((v) => Math.round(v * 255))}`);
+    assert.ok(lv(run(c2), parseColor(c1)) <= 1.01, `${c2} → ${run(c2).map((v) => Math.round(v * 255))}`);
+  }
+});
+
+import { edgeStops, activeLayers } from '../src/core.js';
+
+test('soft edge gradients: interpolating between the stops never leaves [page, full effect]', () => {
+  for (let k = 0; k < 400; k++) {
+    const fb = k % 2
+      ? { a: [0, 1, 2].map(() => (rand() - 0.5) * 4), d: [0, 1, 2].map(() => (rand() - 0.5) * 6) }
+      : resolvePalette({ mode: 'swap', colors: [rcolor(), rcolor()] }).fallback;
+    const kind = kindOf(fb), blends = kind === 'affine' ? AFFINE : CLAMPED;
+    const stops = edgeStops(fb, kind).map(({ t, at }) => ({ t, cols: layersAt(fb, at, kind) }));
+    const c = rcolor(), F = applyFallback(fb, c);
+    for (let j = 0; j <= 400; j++) {
+      const t = 1 - j / 400;
+      let i = 0; while (i < stops.length - 1 && stops[i + 1].t > t) i++;
+      const a = stops[i], b = stops[Math.min(i + 1, stops.length - 1)];
+      const f = a.t === b.t ? 0 : (a.t - t) / (a.t - b.t);
+      const cols = a.cols.map((col, L) => col.map((v, ch) => v + (b.cols[L][ch] - v) * f));
+      const out = cols.reduce((x, col, L) => BLEND[blends[L]](x, col), c);
+      out.forEach((v, ch) => {
+        const lo = Math.min(c[ch], F[ch]), hi = Math.max(c[ch], F[ch]);
+        assert.ok(v > lo - 3 / 255 && v < hi + 3 / 255, `t=${t} ch=${ch} ${v} not in [${lo}, ${hi}]`);
+      });
     }
   }
 });

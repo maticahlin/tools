@@ -58,6 +58,12 @@
   .strip { display: grid; grid-template-columns: repeat(8, 1fr); }
   .strip div { aspect-ratio: 1 / 0.8; }
   .strip-img { display: block; width: 100%; aspect-ratio: 10 / 1; max-width: 100%; }
+  .brand { display: grid; grid-template-columns: 1fr 1fr; min-height: 220px; }
+  .brand-white { background: #fff; padding: 20px clamp(16px, 4vw, 40px); display: grid; gap: 14px; align-content: start; }
+  .brand-red { background: #ff1408; padding: 20px; display: grid; align-content: end; }
+  .brand-name { color: #ff1408; font-size: 16px; }
+  .brand .tile { border: 1px solid currentColor; color: #ff1408; padding: 40px 12px; font-size: 16px; }
+  .brand-red .tile { color: #fff; }
   .dark { background: #111; color: #f5f5f5; padding: 34px clamp(16px, 4vw, 40px) 40px; display: grid; gap: 14px; }
   .dark h3 { font: 700 clamp(28px, 4vw, 44px)/1 var(--font); letter-spacing: -0.03em; }
   .dark p { color: #bdbdbd; }
@@ -149,6 +155,15 @@
           <p class="strip-label"><b>The same colors as an image.</b> <em>Exactly your nodes.</em></p>
           <img class="strip-img" id="stripImg" alt="The eight node colors as an image" data-diffmap>
         </div>
+        <div class="brand bleed">
+          <div class="brand-white">
+            <p class="brand-name">pilot projekt</p>
+            <div class="tile" data-diffmap-text="Vrtec Ljubljana">Vrtec Ljubljana</div>
+          </div>
+          <div class="brand-red">
+            <div class="tile" data-diffmap-text="Hiša na Krasu">Hiša na Krasu</div>
+          </div>
+        </div>
         <div class="dark bleed">
           <h3>Light text on dark</h3>
           <p>Your second section probably looks like this. The cursor uses the same map here.</p>
@@ -162,9 +177,11 @@
         <h4>Effect</h4>
         <div class="seg" role="group" aria-label="Effect">
           <button type="button" id="modeDiff" aria-pressed="true">Difference</button>
+          <button type="button" id="modeSwap" aria-pressed="false">Swap</button>
           <button type="button" id="modeDuo" aria-pressed="false">Duotone</button>
         </div>
         <p class="hint" id="modeHint"></p>
+        <div class="row"><button type="button" class="btn" id="brandPreset">Example: brand red and white, with hover labels</button></div>
       </section>
 
       <section class="box" id="nodesBox">
@@ -182,6 +199,16 @@
           <label>Dark areas become<span class="pick"><input type="color" id="stop0"><input type="text" id="stop0t" aria-label="Dark stop hex" spellcheck="false"></span></label>
           <label>Light areas become<span class="pick"><input type="color" id="stop1"><input type="text" id="stop1t" aria-label="Light stop hex" spellcheck="false"></span></label>
         </div>
+      </section>
+
+      <section class="box" id="swapBox" hidden>
+        <h4>Swap <span>two colors trade places exactly</span></h4>
+        <div class="pair">
+          <label>This color<span class="pick"><input type="color" id="sw0"><input type="text" id="sw0t" aria-label="First swap color hex" spellcheck="false"></span></label>
+          <label>and this one<span class="pick"><input type="color" id="sw1"><input type="text" id="sw1t" aria-label="Second swap color hex" spellcheck="false"></span></label>
+        </div>
+        <div class="status" id="swapStatus"></div>
+        <p class="hint">For a brand color on white: the cursor turns white into the brand color and the brand color into true white. Every other color follows the same rule per channel, and may clip at the edges.</p>
       </section>
 
       <section class="box" id="checkBox">
@@ -220,7 +247,8 @@
         </div>
         <div id="textOpts" class="box" style="border:0;padding:0" hidden>
           <label>Word<input type="text" class="plain" id="word" maxlength="40" spellcheck="false"></label>
-          <label class="slider">Font size<output id="fontOut"></output><input type="range" id="fontSize" min="24" max="260" step="1"></label>
+          <p class="hint">Leave it empty to show labels only over elements with data-diffmap-text, like the project tiles on the left.</p>
+          <label class="slider">Font size<output id="fontOut"></output><input type="range" id="fontSize" min="12" max="260" step="1"></label>
         </div>
         <div id="imageOpts" class="box" style="border:0;padding:0" hidden>
           <p class="hint">The picture is differenced with whatever is under it, then colored by your black and white nodes. A white picture acts like the circle; black leaves the page alone.</p>
@@ -262,7 +290,7 @@
   const ORDER = ['black', 'white', 'red', 'cyan', 'green', 'magenta', 'blue', 'yellow'];
   const PAINTING = 'temeraire.jpg';
   const DEFAULT = {
-    mode: 'difference', nodes: { ...PRESETS.classic }, anchors: ['#111111', '#ffffff'], stops: ['#1a1aff', '#ff5a36'],
+    mode: 'difference', nodes: { ...PRESETS.classic }, anchors: ['#111111', '#ffffff'], stops: ['#1a1aff', '#ff5a36'], swap: ['#ff1408', '#ffffff'],
     shape: 'circle', size: 40, grow: 110, edge: 1.25, word: 'diffmap', fontSize: 120, imgW: 260, ease: 0.2,
   };
   const STORE = 'diffmap-playground-v2';
@@ -274,12 +302,12 @@
   function persist() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch {} }
 
   // ---------------------------------------------------------------- config
-  const palette = () => state.mode === 'duotone'
-    ? { mode: 'duotone', stops: [...state.stops] }
-    : { mode: 'difference', nodes: { ...state.nodes }, anchors: [...state.anchors] };
+  const palette = () => state.mode === 'duotone' ? { mode: 'duotone', stops: [...state.stops] }
+    : state.mode === 'swap' ? { mode: 'swap', colors: [...state.swap] }
+      : { mode: 'difference', nodes: { ...state.nodes }, anchors: [...state.anchors] };
 
   function cursorConfig(forFile) {
-    if (state.shape === 'text') return { text: state.word || 'diffmap', font: `700 ${state.fontSize}px Arial, Helvetica, sans-serif` };
+    if (state.shape === 'text') return { text: state.word, font: `700 ${state.fontSize}px Arial, Helvetica, sans-serif` };
     if (state.shape === 'image') return { image: forFile ? cursorImage.name : cursorImage.src, width: state.imgW };
     return null;
   }
@@ -323,6 +351,8 @@
   bindColor('anc1', () => state.anchors[1], (v) => { state.anchors[1] = v; });
   bindColor('stop0', () => state.stops[0], (v) => { state.stops[0] = v; });
   bindColor('stop1', () => state.stops[1], (v) => { state.stops[1] = v; });
+  bindColor('sw0', () => state.swap[0], (v) => { state.swap[0] = v; });
+  bindColor('sw1', () => state.swap[1], (v) => { state.swap[1] = v; });
 
   function bindColor(id, get, set) {
     const c = $(id), t = $(id + 't');
@@ -347,6 +377,11 @@
 
   $('modeDiff').addEventListener('click', () => { state.mode = 'difference'; render(); applyPalette(); });
   $('modeDuo').addEventListener('click', () => { state.mode = 'duotone'; render(); applyPalette(); });
+  $('modeSwap').addEventListener('click', () => { state.mode = 'swap'; render(); applyPalette(); });
+  $('brandPreset').addEventListener('click', () => {
+    state.mode = 'swap'; state.swap = ['#ff1408', '#ffffff']; state.shape = 'text'; state.word = ''; state.fontSize = 16;
+    render(); restart();
+  });
   for (const [id, shape] of [['shapeCircle', 'circle'], ['shapeText', 'text'], ['shapeImage', 'image']]) {
     $(id).addEventListener('click', () => { state.shape = shape; render(); restart(); });
   }
@@ -363,13 +398,17 @@
 
   // ---------------------------------------------------------------- render
   function render() {
-    const duo = state.mode === 'duotone';
-    $('modeDiff').setAttribute('aria-pressed', String(!duo));
+    const duo = state.mode === 'duotone', swap = state.mode === 'swap', diff = state.mode === 'difference';
+    $('modeDiff').setAttribute('aria-pressed', String(diff));
+    $('modeSwap').setAttribute('aria-pressed', String(swap));
     $('modeDuo').setAttribute('aria-pressed', String(duo));
     $('modeHint').textContent = duo
       ? 'Brightness picks a point between your dark and light stop. Exact everywhere, on every kind of content.'
-      : 'Every color turns into its opposite, and you pick what each opposite looks like.';
-    $('nodesBox').hidden = duo; $('checkBox').hidden = duo; $('duoBox').hidden = !duo;
+      : swap ? 'Two colors trade places exactly, for example your brand color and white.'
+        : 'Every color turns into its opposite, and you pick what each opposite looks like.';
+    $('nodesBox').hidden = !diff; $('checkBox').hidden = !diff; $('duoBox').hidden = !duo; $('swapBox').hidden = !swap;
+    $('sw0').value = $('sw0t').value = state.swap[0];
+    $('sw1').value = $('sw1t').value = state.swap[1];
     for (const k of ORDER) { $(`n-${k}`).value = $(`n-${k}t`).value = state.nodes[k]; }
     $('anc0').value = $('anc0t').value = state.anchors[0];
     $('anc1').value = $('anc1t').value = state.anchors[1];
@@ -388,6 +427,18 @@
 
   function renderStatus() {
     if (state.mode === 'duotone') return;
+    if (state.mode === 'swap') {
+      const r = resolvePalette(palette());
+      const [a, b] = state.swap.map(parseColor);
+      const lv = (x, y) => Math.round(Math.max(...x.map((v, i) => Math.abs(v - y[i]))) * 255);
+      const e1 = lv(applyFallback(r.fallback, a), b), e2 = lv(applyFallback(r.fallback, b), a);
+      const same = lv(a, b) === 0;
+      $('swapStatus').innerHTML = same ? '<p data-state="warn"><span>Pick two different colors.</span></p>'
+        : [[e1, `${state.swap[0]} becomes ${state.swap[1]}`], [e2, `${state.swap[1]} becomes ${state.swap[0]}`]]
+          .map(([e, t]) => `<p data-state="${e <= 1 ? 'ok' : 'warn'}"><span>${t}${e <= 1 ? ', exactly.' : `, within ${e} levels.`}</span></p>`).join('')
+          + `<p data-state="ok"><span>${r.layers.length} blend layer${r.layers.length === 1 ? '' : 's'}, every browser.</span></p>`;
+      return;
+    }
     const r = resolvePalette(palette());
     const fb = r.fallback;
     // what plain page colors become, per node
@@ -441,7 +492,7 @@
     const lum = (c) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
     const duo = (c) => r.fallback.A.map((a, i) => a + (r.fallback.B[i] - a) * lum(c));
     draw('mapIn', (c) => c);
-    draw('mapImg', r.duotone ? duo : (c) => lookup(r.nodes, c));
+    draw('mapImg', r.duotone ? duo : !r.media ? (c) => applyFallback(r.fallback, c) : (c) => lookup(r.nodes, c));
     draw('mapTxt', r.duotone ? duo : (c) => applyFallback(r.fallback, c));
   }
   function hsl(h, s, l) {
@@ -503,7 +554,8 @@
   }
   function fromConfig(c) {
     const p = c.palette ?? {};
-    state.mode = p.mode === 'duotone' ? 'duotone' : 'difference';
+    state.mode = p.mode === 'duotone' || p.mode === 'swap' ? p.mode : 'difference';
+    if (p.colors?.length === 2) state.swap = p.colors.map((x) => toHex(parseColor(x)));
     state.nodes = Object.fromEntries(ORDER.map((k) => [k, toHex(parseColor(p.nodes?.[k] ?? invertNodes()[k]))]));
     if (p.anchors?.length === 2) state.anchors = p.anchors.map((x) => toHex(parseColor(x)));
     if (p.stops?.length === 2) state.stops = p.stops.map((x) => toHex(parseColor(x)));

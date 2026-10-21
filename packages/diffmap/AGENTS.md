@@ -20,7 +20,9 @@ Typical asks: "add the diffmap cursor", "set up diffmap", "difference cursor in 
      npx @maticahlin/diffmap setup --preset ultramarine --anchors "#111111,#ffffff"
      npx @maticahlin/diffmap setup --nodes '{"black":"#f4efe6","white":"#141414","red":"#ffd400"}' --anchors "#111,#fff"
      npx @maticahlin/diffmap setup --duotone "#1a1aff,#ff5a36"
+     npx @maticahlin/diffmap setup --swap "#ff1408,#ffffff"      # brand color ↔ white, exact
      ```
+   If the site is essentially two colors (a brand color on white, or text color on background) and the user wants them to trade places under the cursor, use `--swap` with exactly those two colors.
    Both write `diffmap.config.json` in the current directory (`--out` to change it). Add `--json` to get a machine-readable report.
 
 3. **Read the report.** `npx @maticahlin/diffmap check --json` returns how exact the palette is:
@@ -46,7 +48,9 @@ Typical asks: "add the diffmap cursor", "set up diffmap", "difference cursor in 
 
 5. **Mark the images and video** that should get the full color map: add `data-diffmap` to each `<img>` or `<video>` (or pass `media: true` to include all of them). Images from another domain need CORS (`crossorigin="anonymous"` on the tag plus an `Access-Control-Allow-Origin` header on the server); without it they still work but use the simpler fallback.
 
-6. **Optional per-section palettes:** add `palettes: { hero: {…} }` to the config and `data-diffmap-palette="hero"` to the section. `data-diffmap-size="120"` sets the cursor size over an element. Links and buttons grow the cursor automatically.
+6. **Hover labels:** for a label cursor (project names that follow the mouse), use `--text ""` with the site's font and add `data-diffmap-text="Project name"` to each hoverable item. Load the web font before or let diffmap re-render once `document.fonts` reports it ready.
+
+7. **Optional per-section palettes:** add `palettes: { hero: {…} }` to the config and `data-diffmap-palette="hero"` to the section. `data-diffmap-size="120"` sets the cursor size over an element. Links and buttons grow the cursor automatically.
 
 ## Things to check after installing
 

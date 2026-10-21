@@ -2,7 +2,7 @@
 // Zero dependencies. ~3 KB min+gz. See README.md for the full guide.
 
 import {
-  resolvePalette, lookup, precorrect, layersAt, rampBreaks,
+  resolvePalette, lookup, precorrect, layersAt, edgeStops, kindOf, activeLayers, AFFINE, CLAMPED,
 } from './core.js';
 
 export * from './core.js';
@@ -41,7 +41,8 @@ export function diffmap(options = {}) {
   const resolved = {};
   const pal = (name) => (resolved[name] ??= resolvePalette(raw[name] ?? raw.default));
   let current = pal('default');
-  let shown = { A: [...current.fallback.A], B: [...current.fallback.B] };
+  const copy = (fb) => ({ a: [...fb.a], d: [...fb.d] });
+  let shown = copy(current.fallback);
   let tween = null;
 
   // ---- blend layers
@@ -87,8 +88,8 @@ export function diffmap(options = {}) {
   };
 
   const shape = createShape(opt.cursor ?? {}, { mkLayer, move, edge: opt.edge });
-  const paintLayers = (A, B, duotone) => shape.paint(A, B, duotone);
-  paintLayers(shown.A, shown.B, current.duotone);
+  const paintLayers = (fb, duotone) => shape.paint(fb, duotone);
+  paintLayers(shown, current.duotone);
   if (shape.static) opt.transition = 0; // bitmap shapes repaint per palette, so palettes switch instantly
 
   if (opt.hideCursor) document.documentElement.style.cursor = 'none';
@@ -121,6 +122,10 @@ export function diffmap(options = {}) {
       const sizeAttr = over.closest?.('[data-diffmap-size]')?.getAttribute('data-diffmap-size');
       target.size = sizeAttr ? Number(sizeAttr) : growMatch(over) ? opt.grow.size : opt.size;
       switchTo(areaPalette(over));
+      if (shape.setText) {
+        const host = over.closest?.('[data-diffmap-text]');
+        shape.setText(host ? host.getAttribute('data-diffmap-text') : (opt.cursor?.text ?? ''));
+      }
     }
     if (pos.x < -900) { pos.x = target.x; pos.y = target.y; } // first move: don't fly in from the corner
     if (target.size === 0) target.size = opt.size;
@@ -141,10 +146,10 @@ export function diffmap(options = {}) {
     if (name === currentName) return;
     currentName = name;
     const next = pal(name);
-    const from = { A: [...shown.A], B: [...shown.B] };
+    const from = copy(shown);
     if (next.duotone !== current.duotone || opt.transition <= 0) {
-      current = next; shown = { A: [...next.fallback.A], B: [...next.fallback.B] };
-      paintLayers(shown.A, shown.B, next.duotone); tween = null; kick(); return;
+      current = next; shown = copy(next.fallback);
+      paintLayers(shown, next.duotone); tween = null; kick(); return;
     }
     current = next;
     tween = { from, start: performance.now() };
@@ -165,9 +170,11 @@ export function diffmap(options = {}) {
     if (tween) {
       const k = Math.min(1, (now - tween.start) / opt.transition);
       const s = k * k * (3 - 2 * k);
-      shown.A = tween.from.A.map((v, i) => v + (current.fallback.A[i] - v) * s);
-      shown.B = tween.from.B.map((v, i) => v + (current.fallback.B[i] - v) * s);
-      paintLayers(shown.A, shown.B, current.duotone);
+      shown = {
+        a: tween.from.a.map((v, i) => v + (current.fallback.a[i] - v) * s),
+        d: tween.from.d.map((v, i) => v + (current.fallback.d[i] - v) * s),
+      };
+      paintLayers(shown, current.duotone);
       if (k >= 1) tween = null;
     }
 
@@ -189,6 +196,8 @@ export function diffmap(options = {}) {
       currentName = null; switchTo(areaPalette(over));
       media.reset();
     },
+    /** text cursor: change the label (elements with data-diffmap-text do this on hover) */
+    setText(str) { shape.setText?.(str); kick(); },
     /** re-scan the page for new media elements */
     refresh() { media.scan(); },
     /** what happened to each image/video: ready, loading, working, tainted (CORS), skip */
@@ -219,25 +228,57 @@ const snap = (v) => Math.round(v * dpr()) / dpr();
 const snapUp = (v) => Math.ceil(v * dpr()) / dpr();
 
 function createShape(cursor, env) {
-  if (cursor.text) return textShape(cursor, env);
+  if (cursor.text !== undefined) return textShape(cursor, env);
   if (cursor.image) return imageShape(cursor, env);
   return circleShape(env);
 }
 
-// Circle: three opaque squares on whole device pixels, each painted with a radial
-// gradient that carries the effect strength from 1 inside to 0 at the rim.
+/** The blend stack a palette needs: kind, which layers are active, their blend modes. */
+function plan(fb) {
+  const kind = kindOf(fb);
+  const idx = activeLayers(fb, kind);
+  const all = kind === 'affine' ? AFFINE : CLAMPED;
+  return { kind, idx, blends: idx.map((L) => all[L]), at: (t) => { const c = layersAt(fb, t, kind); return idx.map((L) => c[L]); } };
+}
+
+/** Keeps a list of layer elements matching a list of blend modes, inserted after `after`. */
+function layerSet(mkLayer) {
+  let els = [], sig = '';
+  return {
+    ensure(blends, style) {
+      const s = blends.join(',');
+      if (s !== sig) {
+        els.forEach((el) => el.remove());
+        els = blends.map((b) => { const el = mkLayer(b); Object.assign(el.style, style ?? {}); return el; });
+        sig = s;
+      }
+      return els;
+    },
+    get els() { return els; },
+    remove() { els.forEach((el) => el.remove()); els = []; sig = ''; },
+  };
+}
+
+// Circle: opaque squares on whole device pixels, each painted with a radial gradient
+// that carries the effect strength from 1 inside to 0 at the rim.
 function circleShape({ mkLayer, move, edge = 1.25 }) {
   const lum = mkLayer('color');            // duotone only: keeps the backdrop's luminance
   lum.style.borderRadius = '50%';
   lum.style.backgroundColor = '#808080';
-  const els = [mkLayer('multiply'), mkLayer('difference'), mkLayer('difference')];
-  let fb = null, breaks = [], duo = false, last = '';
+  const set = layerSet(mkLayer);
+  let p = null, stops = [], duo = false, last = '';
 
   return {
-    paint(A, B, duotone) { fb = { A, B }; breaks = rampBreaks(fb); duo = duotone; lum.style.display = duo ? '' : 'none'; last = ''; },
+    paint(fb, duotone) {
+      p = plan(fb); duo = duotone; last = '';
+      lum.style.display = duo ? '' : 'none';
+      set.ensure(p.blends);
+      // gradient stops: every branch switch twice (both sides), plus samples in between
+      stops = edgeStops(fb, p.kind).map(({ t, at }) => ({ t, cols: p.at(at) }));
+    },
     place(x, y, size) {
       const r = size / 2;
-      if (r < 0.5) { for (const el of [lum, ...els]) move(el, -9999, -9999); return null; }
+      if (r < 0.5 || !p) { for (const el of [lum, ...set.els]) move(el, -9999, -9999); return null; }
       const s = Math.min(edge, r);
       const side = snapUp(2 * r + 4);
       const left = snap(x - side / 2), top = snap(y - side / 2);
@@ -245,82 +286,128 @@ function circleShape({ mkLayer, move, edge = 1.25 }) {
       const key = `${side}|${cx.toFixed(3)}|${cy.toFixed(3)}|${r}`;
       if (key !== last) {
         last = key;
-        const rad = (t) => `${(r - s * t).toFixed(3)}px`;
-        const stops = [[], [], []];
-        const push = (t, cols) => cols.forEach((c, k) => stops[k].push(`${rgb(c)} ${rad(t)}`));
-        push(1, layersAt(fb, 1));
-        for (const tc of breaks) { push(tc, layersAt(fb, tc + 1e-7)); push(tc, layersAt(fb, tc - 1e-7)); }
-        push(0, layersAt(fb, 0));
+        const lists = p.blends.map(() => []);
+        for (const { t, cols } of stops) cols.forEach((c, L) => lists[L].push(`${rgb(c)} ${(r - s * t).toFixed(3)}px`));
         const at = `circle at ${cx.toFixed(3)}px ${cy.toFixed(3)}px`;
-        els.forEach((el, k) => {
+        set.els.forEach((el, L) => {
           el.style.width = el.style.height = side + 'px';
-          el.style.backgroundImage = `radial-gradient(${at}, ${stops[k].join(', ')})`;
+          el.style.backgroundImage = `radial-gradient(${at}, ${lists[L].join(', ')})`;
         });
       }
-      for (const el of els) move(el, left, top);
+      for (const el of set.els) move(el, left, top);
       if (duo) { lum.style.width = lum.style.height = 2 * r + 'px'; move(lum, x - r, y - r); }
       return { kind: 'circle', x, y, r: Math.max(0, r - s) };
     },
-    destroy() { [lum, ...els].forEach((el) => el.remove()); },
+    destroy() { lum.remove(); set.remove(); },
   };
 }
 
-// Text: the word's anti-aliasing coverage becomes the effect strength t, baked per pixel
-// into three bitmaps at device resolution. Same exactness as the circle, any glyph shape.
+// Text: the glyphs' anti-aliasing coverage becomes the effect strength t, baked per pixel
+// into one bitmap per layer at device resolution. Exact for any glyph shape.
+// The text can change: elements with data-diffmap-text="…" show their own label.
 function textShape(cursor, { mkLayer, move }) {
-  const font = cursor.font ?? '900 72px Arial, Helvetica, sans-serif';
-  const text = String(cursor.text);
+  const font = cursor.font ?? '700 72px Arial, Helvetica, sans-serif';
+  const lineHeight = cursor.lineHeight ?? 1.2;
+  const maxWidth = cursor.maxWidth ?? Infinity;
+  const align = cursor.align ?? 'center';
   const lum = mkLayer('color');
   lum.style.backgroundColor = '#808080';
-  const els = [mkLayer('multiply'), mkLayer('difference'), mkLayer('difference')];
-  const k = dpr();
-  const c = document.createElement('canvas');
-  const ctx = c.getContext('2d', { willReadFrequently: true });
-  ctx.font = font;
-  const mt = ctx.measureText(text);
-  const pad = 4;
-  const asc = mt.actualBoundingBoxAscent ?? parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? 72) * 0.8;
-  const desc = mt.actualBoundingBoxDescent ?? asc * 0.25;
-  const w = Math.ceil((mt.width + 2 * pad) * k), h = Math.ceil((asc + desc + 2 * pad) * k);
-  c.width = w; c.height = h;
-  ctx.scale(k, k);
-  ctx.font = font; ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText(text, pad, pad + asc);
-  const cov = ctx.getImageData(0, 0, w, h).data;
-  const maskUrl = c.toDataURL();
-  const W = w / k, H = h / k;
-  for (const el of [lum, ...els]) {
-    el.style.width = W + 'px'; el.style.height = H + 'px'; el.style.backgroundSize = '100% 100%';
+  const set = layerSet(mkLayer);
+  const bg = { backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat' };
+  let text = String(cursor.text ?? ''), fb = null, duo = false;
+  let glyphs = null; // { cov, w, h, W, H, maskUrl }
+  let gen = 0;
+
+  function lines(ctx, str) {
+    const out = [];
+    for (const para of str.split('\n')) {
+      let line = '';
+      for (const word of para.split(/(\s+)/)) {
+        const next = line + word;
+        if (line && ctx.measureText(next.trimEnd()).width > maxWidth) { out.push(line.trimEnd()); line = word.trimStart(); }
+        else line = next;
+      }
+      out.push(line.trimEnd());
+    }
+    return out;
   }
-  for (const p of ['maskImage', 'webkitMaskImage']) lum.style[p] = `url("${maskUrl}")`;
-  for (const p of ['maskSize', 'webkitMaskSize']) lum.style[p] = '100% 100%';
+
+  function render() {
+    if (!text.trim()) { glyphs = null; return; }
+    const k = dpr();
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.font = font;
+    const ls = lines(ctx, text);
+    const px = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? 72);
+    const lh = px * lineHeight;
+    const widths = ls.map((l) => ctx.measureText(l).width);
+    const pad = Math.ceil(px * 0.25);
+    const Wcss = Math.max(...widths) + 2 * pad, Hcss = lh * ls.length + 2 * pad;
+    const w = Math.ceil(Wcss * k), h = Math.ceil(Hcss * k);
+    c.width = w; c.height = h;
+    ctx.scale(k, k);
+    ctx.font = font; ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+    ls.forEach((l, i) => {
+      const x = align === 'left' ? pad : align === 'right' ? Wcss - pad - widths[i] : (Wcss - widths[i]) / 2;
+      ctx.fillText(l, x, pad + lh * (i + 0.5));
+    });
+    glyphs = { cov: ctx.getImageData(0, 0, w, h).data, w, h, W: w / k, H: h / k, maskUrl: c.toDataURL() };
+  }
+
+  function bake() {
+    if (!glyphs || !fb) return;
+    const p = plan(fb);
+    const els = set.ensure(p.blends, bg);
+    const { cov, w, h, W, H } = glyphs;
+    const table = Array.from({ length: 256 }, (_, a) => p.at(a / 255));
+    const tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    const tctx = tmp.getContext('2d');
+    els.forEach((el, L) => {
+      const img = tctx.createImageData(w, h), d = img.data;
+      for (let i = 0; i < cov.length; i += 4) {
+        const col = table[cov[i + 3]][L];
+        d[i] = col[0] * 255 + 0.5; d[i + 1] = col[1] * 255 + 0.5; d[i + 2] = col[2] * 255 + 0.5; d[i + 3] = 255;
+      }
+      tctx.putImageData(img, 0, 0);
+      el.style.backgroundImage = `url("${tmp.toDataURL()}")`;
+      el.style.width = W + 'px'; el.style.height = H + 'px';
+    });
+    lum.style.width = W + 'px'; lum.style.height = H + 'px';
+    for (const pr of ['maskImage', 'webkitMaskImage']) lum.style[pr] = `url("${glyphs.maskUrl}")`;
+    for (const pr of ['maskSize', 'webkitMaskSize']) lum.style[pr] = '100% 100%';
+  }
+
+  // web fonts: re-render once the face is ready, so the bitmap isn't drawn in the fallback font
+  const ready = () => document.fonts?.load ? document.fonts.load(font, text || 'a').catch(() => {}) : Promise.resolve();
 
   return {
     static: true,
-    paint(A, B, duotone) {
-      lum.style.display = duotone ? '' : 'none';
-      // the 256 possible coverage values → layer colors, then per pixel
-      const table = Array.from({ length: 256 }, (_, a) => layersAt({ A, B }, a / 255));
-      const out = els.map(() => new ImageData(w, h));
-      for (let i = 0; i < cov.length; i += 4) {
-        const t = table[cov[i + 3]];
-        for (let L = 0; L < 3; L++) {
-          const d = out[L].data, col = t[L];
-          d[i] = col[0] * 255 + 0.5; d[i + 1] = col[1] * 255 + 0.5; d[i + 2] = col[2] * 255 + 0.5; d[i + 3] = 255;
-        }
-      }
-      const tmp = document.createElement('canvas');
-      tmp.width = w; tmp.height = h;
-      const tctx = tmp.getContext('2d');
-      els.forEach((el, L) => { tctx.putImageData(out[L], 0, 0); el.style.backgroundImage = `url("${tmp.toDataURL()}")`; });
+    setText(str) {
+      str = String(str ?? '');
+      if (str === text) return;
+      text = str;
+      const my = ++gen;
+      render(); bake();
+      ready().then(() => { if (my === gen) { render(); bake(); } });
+    },
+    paint(next, duotone) {
+      fb = next; duo = duotone;
+      lum.style.display = duo ? '' : 'none';
+      if (!glyphs) render();
+      bake();
+      const my = ++gen;
+      ready().then(() => { if (my === gen) { render(); bake(); } });
     },
     place(x, y, size) {
-      if (size < 0.5) { for (const el of [lum, ...els]) move(el, -9999, -9999); return null; }
-      const left = snap(x - W / 2), top = snap(y - H / 2);
-      for (const el of [lum, ...els]) move(el, left, top);
-      return { kind: 'mask', url: maskUrl, left, top, w: W, h: H };
+      if (size < 0.5 || !glyphs) { for (const el of [lum, ...set.els]) move(el, -9999, -9999); return null; }
+      const left = snap(x - glyphs.W / 2), top = snap(y - glyphs.H / 2);
+      for (const el of set.els) move(el, left, top);
+      if (duo) move(lum, left, top); else move(lum, -9999, -9999);
+      return { kind: 'mask', url: glyphs.maskUrl, left, top, w: glyphs.W, h: glyphs.H };
     },
-    destroy() { [lum, ...els].forEach((el) => el.remove()); },
+    destroy() { lum.remove(); set.remove(); },
   };
 }
 
@@ -333,32 +420,34 @@ function imageShape(cursor, { mkLayer, move }) {
   pic.style.backgroundSize = '100% 100%';
   const lum = mkLayer('color');
   lum.style.backgroundColor = '#808080';
-  const els = [mkLayer('multiply'), mkLayer('difference'), mkLayer('difference')];
-  let W = cursor.width ?? 220, H = cursor.height ?? W * 0.75;
+  const set = layerSet(mkLayer);
+  let W = cursor.width ?? 220, H = cursor.height ?? W * 0.75, fb = null;
   const img = new Image();
-  img.onload = () => {
-    if (!cursor.height) H = W * img.naturalHeight / img.naturalWidth;
-    size();
-  };
+  img.onload = () => { if (!cursor.height) H = W * img.naturalHeight / img.naturalWidth; size(); };
   img.src = cursor.image;
   function size() {
     W = snapUp(W); H = snapUp(H);
-    for (const el of [pic, lum, ...els]) { el.style.width = W + 'px'; el.style.height = H + 'px'; }
+    for (const el of [pic, lum, ...set.els]) { el.style.width = W + 'px'; el.style.height = H + 'px'; }
   }
   size();
   return {
     static: true,
-    paint(A, B, duotone) {
+    paint(next, duotone) {
       lum.style.display = duotone ? '' : 'none';
-      layersAt({ A: B, B: A }, 1).forEach((col, k) => { els[k].style.backgroundColor = rgb(col); });
+      // G(y) = F(1 − y): intercept a + d, slope −d
+      fb = { a: next.a.map((v, i) => v + next.d[i]), d: next.d.map((v) => -v) };
+      const p = plan(fb);
+      const els = set.ensure(p.blends);
+      p.at(1).forEach((col, L) => { els[L].style.backgroundColor = rgb(col); });
+      size();
     },
     place(x, y, sz) {
-      if (sz < 0.5) { for (const el of [pic, lum, ...els]) move(el, -9999, -9999); return null; }
+      if (sz < 0.5) { for (const el of [pic, lum, ...set.els]) move(el, -9999, -9999); return null; }
       const left = snap(x - W / 2), top = snap(y - H / 2);
-      for (const el of [pic, lum, ...els]) move(el, left, top);
+      for (const el of [pic, lum, ...set.els]) move(el, left, top);
       return null; // the picture differs from moment to moment, so overlays can't pre-correct for it
     },
-    destroy() { [pic, lum, ...els].forEach((el) => el.remove()); },
+    destroy() { pic.remove(); lum.remove(); set.remove(); },
   };
 }
 
@@ -403,7 +492,7 @@ function createMedia(opt, pal, areaPalette) {
   function prepare(it) {
     const el = it.el;
     it.palette = pal(areaPalette(el));
-    if (it.palette.duotone) { it.state = 'skip'; return; } // duotone is luminance-only, layers already do it
+    if (!it.palette.media) { it.state = 'skip'; return; } // duotone / swap: the layers alone draw the whole map
     if (el.tagName === 'VIDEO') return prepareVideo(it);
     if (!el.complete || !el.naturalWidth) {
       it.state = 'loading';

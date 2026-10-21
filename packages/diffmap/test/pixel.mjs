@@ -30,6 +30,7 @@ const PALETTES = {
     anchors: ['#000000', '#ffffff'],
   },
   duotone: { mode: 'duotone', stops: ['#1a1aff', '#ff5a36'] },
+  swap: { mode: 'swap', colors: ['#ff1408', '#ffffff'] },   // clamped 8-layer stack
 };
 
 // ------------------------------------------------------------------ comparison
@@ -44,7 +45,7 @@ const EDGE = 1.25; // runtime default
 function target(pal, b, onImage) {
   if (pal.duotone) return pal.fallback.A.map((v, i) => v + (pal.fallback.B[i] - v) * lumOf(b));
   // on images: the node map, as far as the fallback layers can reach it (see core.coverage)
-  if (onImage) return applyFallback(pal.fallback, precorrect(pal.fallback, lookup(pal.nodes, b)));
+  if (onImage && pal.media) return applyFallback(pal.fallback, precorrect(pal.fallback, lookup(pal.nodes, b)));
   return applyFallback(pal.fallback, b);
 }
 
@@ -61,7 +62,7 @@ function outside(a, allowed) {
 /** Colors a rim pixel may legitimately be a mix of: the untouched page and the full effect. */
 function allowedMix(pal, b, onImage) {
   const set = [b, target(pal, b, onImage)];
-  if (onImage) set.push(applyFallback(pal.fallback, b));
+  if (onImage && pal.media) set.push(applyFallback(pal.fallback, b));
   if (pal.duotone) { const L = lumOf(b); set.push([L, L, L], applyFallback(pal.fallback, b)); }
   return set;
 }
@@ -117,14 +118,14 @@ function compareImage(before, after, box, paint, pal) {
   const errs = [];
   const [l, t] = box.map(Math.round);
   // G(y) = F(1 − y): black and white swapped, applied to |page − picture|
-  const G = { A: pal.fallback.B, B: pal.fallback.A };
+  const G = { a: pal.fallback.a.map((v, i) => v + pal.fallback.d[i]), d: pal.fallback.d.map((v) => -v) };
   for (let y = 0; y < paint.height; y++) for (let x = 0; x < paint.width; x++) {
     const X = l + x, Y = t + y;
     if (X < 0 || Y < 0 || X >= after.width || Y >= after.height) continue;
     const b = px(before, X, Y), a = px(after, X, Y), S = px(paint, x, y);
     const diff = b.map((v, i) => Math.abs(v - S[i]));
     const want = pal.duotone
-      ? G.A.map((v, i) => v + (G.B[i] - v) * lumOf(diff))
+      ? G.a.map((v, i) => Math.min(1, Math.max(0, v + G.d[i] * lumOf(diff))))
       : applyFallback(G, diff);
     errs.push(Math.max(...a.map((v, i) => Math.abs(v - want[i]))) * 255);
   }
@@ -148,7 +149,7 @@ for (const engine of engines) {
   try { d = await driver(engine); } catch (e) { console.log(`\n${engine}: SKIPPED (${e.message.split('\n')[0]})`); continue; }
   console.log(`\n== ${engine} (${d.version})`);
   const cursors = (process.env.CURSORS ?? 'circle,text,image').split(',');
-  for (const cur of cursors) for (const [name, palette] of Object.entries(PALETTES)) {
+  for (const cur of cursors) for (const [name, palette] of Object.entries(PALETTES).filter(([n]) => !process.env.PALETTES || process.env.PALETTES.split(',').includes(n))) {
     if (cur !== 'circle' && name === 'classic') continue;
     const pal = resolvePalette(palette);
     await d.open(`${url}?cur=${cur}&pos=${process.env.POS || 'auto'}&video=${process.env.VIDEO ? 1 : ''}&size=${2 * R}&p=${encodeURIComponent(JSON.stringify(palette))}`);
@@ -156,7 +157,7 @@ for (const engine of engines) {
     const rects = await d.eval('window.__rects()');
     const ic = [(rects.img[0] + rects.img[2]) / 2, (rects.img[1] + rects.img[3]) / 2];
     await d.eval(`window.__move(${ic[0]}, ${ic[1]})`);
-    if (!pal.duotone && cur !== 'image') for (let i = 0; i < 50 && !(await d.eval('window.__overlayReady()')); i++) await sleep(100);
+    if (pal.media && cur !== 'image') for (let i = 0; i < 50 && !(await d.eval('window.__overlayReady()')); i++) await sleep(100);
     await sleep(cur === 'image' ? 500 : 0);
     await d.eval('window.__move(-500, -500)');
     await sleep(300);

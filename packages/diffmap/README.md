@@ -10,6 +10,28 @@ The classic `mix-blend-mode: difference` cursor inverts whatever is under it —
 - **Small.** No dependencies, a few KB.
 - **Agent-friendly setup.** `npx @maticahlin/diffmap setup` opens a local editor; flags let coding agents do it without a browser.
 
+## The case that started it: brand red ↔ white
+
+A red label over white and over a red surface. The classic fix, a cyan label with `mix-blend-mode: difference`, gets white → red right but turns red into pink, because true white over red would need the label's green and blue above 100%. No label color can fix that.
+
+```json
+{ "palette": { "mode": "swap", "colors": ["#ff1408", "#ffffff"] },
+  "cursor": { "text": "", "font": "16px 'Syndicat Grotesk', Arial, sans-serif" } }
+```
+
+```html
+<a href="/projekti/vrtec" data-diffmap-text="Vrtec Ljubljana">…</a>
+```
+
+Measured in Chromium and WebKit (`node test/pilot.mjs`):
+
+| | over white | over red |
+| --- | --- | --- |
+| classic difference label | rgb(255, 53, 35) | rgb(255, 182, 212), pink |
+| diffmap swap | **rgb(255, 20, 8)** | **rgb(255, 255, 255)** |
+
+Swap uses `lighten` and `darken` layers so each channel can clip at 0 and 1, which is exactly what this needs.
+
 ## Quick start
 
 ```sh
@@ -36,7 +58,7 @@ No bundler? `npx @maticahlin/diffmap vendor public/diffmap` copies the runtime a
 
 Browsers can't hand JavaScript the pixels of a rendered page, so diffmap uses two engines that agree with each other.
 
-**1. Blend layers — everything on the page.** CSS blend modes work on each color channel separately. Three stacked circles (`multiply`, `difference`, `difference`) can compute any per-channel map `out = A + (B − A) · in`, where A is what black turns into and B is what white turns into. This runs on the GPU compositor in every browser. It can follow your full node map only along straight lines per channel, so diffmap fits it to your map and makes your site's **text and background colors land exactly** (the `anchors`). Classic white difference is the special case A = white, B = black.
+**1. Blend layers — everything on the page.** CSS blend modes work on each color channel separately. Three stacked layers (`multiply`, `difference`, `difference`) compute any per-channel map `out = A + (B − A) · in`, where A is what black turns into and B is what white turns into. When the map has to clip at 0 or 1 (brand red ↔ white does), up to eight layers add `lighten`, `darken` and `color-dodge`, which gives any `clamp(a + d · in)` per channel. This runs on the GPU compositor in every browser. It can follow your full node map only along straight lines per channel, so diffmap fits it to your map and makes your site's **text and background colors land exactly** (the `anchors`). Classic white difference is the special case A = white, B = black.
 
 **2. Node map — images and video.** For each `[data-diffmap]` image, diffmap reads the pixels once, runs them through your full 8-node color cube, and keeps the result as a hidden copy that only shows inside the cursor. That copy is pre-corrected for the blend layers that still sit on top, so after both engines the image comes out exactly as your map says, and text on top of it still matches the rest of your text. Video is recolored per frame with WebGL, only while the cursor is over it.
 
@@ -88,6 +110,9 @@ image pixels ─► node map ─► pre-correct ─► blend layers ────
 | `data-diffmap-size="120"` | cursor size while over this element |
 | `data-diffmap-grow` | grow like a link |
 | `data-diffmap-ignore` | skip media inside this element |
+| `data-diffmap-text="Label"` | text cursor: show this label while over the element (empty `cursor.text` = labels only) |
+
+**Swap** (`"mode": "swap", "colors": [a, b]`) makes two colors trade places exactly, in every browser, on any content. Everything else follows the same rule per channel. Use it for a brand color on white.
 
 **Duotone** maps brightness to a two-color ramp instead (`"stops": [dark, light]`). It's exact everywhere, including text, but colors collapse to the ramp.
 
@@ -110,6 +135,7 @@ diffmap setup                      editor on localhost; "Save to project" writes
 diffmap setup --preset riso --anchors "#111,#fff"
 diffmap setup --nodes '{"red":"#ffd400"}'      unset nodes keep their current value
 diffmap setup --duotone "#1a1aff,#ff5a36"
+diffmap setup --swap "#ff1408,#fff" --text ""   brand red ↔ white, hover labels from data-diffmap-text
 diffmap setup --text "hello"                   cursor shapes: --text, --image <url> --width <px>, --circle
 diffmap check [--json]             how exact the saved palette renders
 diffmap vendor <dir>               copy the runtime for sites without a bundler

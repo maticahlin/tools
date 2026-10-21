@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Replica of the pilotprojekt.si hover label: brand red rgb(255,20,8) on white, plus a red surface. -->
+<style>
+  html, body { margin: 0; background: #fff; }
+  body { font: 400 16px/20px Arial, Helvetica, sans-serif; color: #000; width: 1200px; height: 900px; position: relative; }
+  .brand { position: absolute; left: 40px; top: 30px; color: rgb(255, 20, 8); font-size: 16px; }
+  .surface { position: absolute; left: 600px; top: 0; width: 600px; height: 900px; background: rgb(255, 20, 8); color: #000; }
+  .tile { position: absolute; left: 80px; top: 120px; width: 900px; height: 600px; }
+  /* the site's own label, for comparison */
+  .old { position: fixed; pointer-events: none; z-index: 50; mix-blend-mode: difference; color: color(display-p3 0.0819 0.7792 0.8492);
+         font: 700 var(--px, 160px)/1 Arial, Helvetica, sans-serif; transform: translate(-50%, -50%); white-space: pre; }
+</style>
+</head>
+<body>
+  <span class="brand">pilot projekt</span>
+  <div class="surface"></div>
+  <div class="tile" data-diffmap-text="Vrtec Ljubljana"></div>
+  <div class="old" id="old" hidden></div>
+<script type="module">
+  import { diffmap } from '/src/index.js';
+  const q = new URLSearchParams(location.search);
+  const px = Number(q.get('px') || 160);
+  document.documentElement.style.setProperty('--px', px + 'px');
+  if (q.get('mode') === 'old') {
+    const o = document.getElementById('old');
+    o.hidden = false;
+    window.__move = (x, y) => { o.style.left = x + 'px'; o.style.top = y + 'px'; o.textContent = q.get('label') || 'Vrtec Ljubljana'; };
+  } else {
+    window.__dm = diffmap({
+      palette: { mode: 'swap', colors: ['#ff1408', '#ffffff'] },
+      cursor: { text: q.get('label') || 'Vrtec Ljubljana', font: `700 ${px}px Arial, Helvetica, sans-serif` },
+      force: true, ease: 1, grow: false, transition: 0,
+    });
+    window.__move = (x, y) => {
+      const t = document.elementFromPoint(x, y) || document.body;
+      t.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true }));
+    };
+  }
+  window.__ready = true;
+</script>
+</body>
+</html>
