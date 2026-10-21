@@ -466,7 +466,8 @@ function imageShape(cursor, { mkLayer, move, space }) {
 
 // Only WebKitGTK / WPE (Linux) refuse to blend composited layers, so only they get the
 // absolute strategy. Safari on macOS blends fixed, translate3d and will-change layers fine
-// (checked with test/blend-check.html), and the absolute box broke it there.
+// (test/blend-check.html). The black label box seen in Safari came from <canvas> layers
+// inside the absolute box; both are gone, and Safari now takes the same path as Chrome.
 function isWebKit() {
   const ua = navigator.userAgent;
   return /AppleWebKit/.test(ua) && /Linux|X11|WPE/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS|SamsungBrowser|Android/.test(ua);
