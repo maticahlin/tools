@@ -168,13 +168,14 @@ Coding agents: see [AGENTS.md](./AGENTS.md).
 
 ## Browser notes
 
-| | Blend layers | Images (node map) | Video (WebGL) | Blends in |
+| | Blend layers | Images (node map) | Text / image cursors | Blends in |
 | --- | --- | --- | --- | --- |
-| Chrome / Edge on Windows | ✓ checked by hand | ✓ | ✓ | sRGB |
-| Chrome on macOS | ✓ checked by hand | ✓ | ✓ | Display P3 on wide-gamut screens |
-| Safari 27 on macOS | ✓ every technique blends (test/blend-check.html) | needs a check | needs a check | Display P3 |
-| Chromium, WebKitGTK (Linux) | ✓ pixel-tested | ✓ pixel-tested | Chromium ✓ | sRGB |
-| Firefox | needs a check | needs a check | needs a check | ? |
+| Chrome, Edge | ✓ CI: Windows, macOS, Linux | ✓ CI | ✓ CI | sRGB; Display P3 on wide-gamut Macs |
+| Firefox | ✓ CI: Windows, macOS, Linux | ✓ CI | ✓ CI | sRGB |
+| WebKit (Safari's engine) | ✓ CI: Windows, macOS, Linux | ✓ CI | ✓ CI | sRGB in CI |
+| Safari 27, real Mac | ✓ by hand (blend check, brand label) | not yet checked by hand | ✓ by hand (label) | Display P3 |
+
+Every push runs the full pixel test (100 checks per browser) on 3 systems × 3 browsers. CI machines have no wide-gamut screen, so Display P3 blending is checked by hand on a Mac with the blend check page.
 
 `test/blend-check.html` renders 22 techniques next to what they should look like. Open it in any browser to see what that browser blends and in which color space (boxes 6 vs 7).
 
