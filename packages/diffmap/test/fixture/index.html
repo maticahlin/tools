@@ -26,8 +26,9 @@
   for (const c of cols) { const d = document.createElement('div'); d.className = 'sw'; d.style.background = c; swatches.append(d); }
 </script>
 <script type="module">
-  import { diffmap } from '/src/index.js';
   const q = new URLSearchParams(location.search);
+  // ?dist=1 runs the minified bundle instead of the sources
+  const { diffmap } = await import(q.get('dist') ? '/dist/diffmap.min.js' : '/src/index.js');
   if (q.get('video')) {
     // same box, but a paused <video> instead of the <img>
     const v = document.createElement('video');
@@ -37,11 +38,12 @@
     document.getElementById('img').replaceWith(v);
     await new Promise((r) => { v.addEventListener('seeked', r, { once: true }); v.addEventListener('loadeddata', () => { v.currentTime = 1; }, { once: true }); });
   }
+  if (q.get('big')) document.getElementById('img').src = 'big.jpg';
   const palette = JSON.parse(q.get('p') || '{}');
   const cur = q.get('cur');
   const cursor = cur === 'text' ? { text: 'Diff', font: '900 150px Arial, Helvetica, sans-serif' }
     : cur === 'image' ? { image: 'paint.png', width: 240, height: 180 } : null;
-  window.__dm = diffmap({ palette, cursor, force: true, ease: 1, size: Number(q.get('size') || 260), grow: false, transition: 0, position: q.get('pos') || 'auto' });
+  window.__dm = diffmap({ palette, cursor, force: true, ease: 1, size: Number(q.get('size') || 260), grow: false, transition: 0, position: q.get('pos') || 'auto', colorSpace: q.get('space') || 'srgb' });
   window.__layerRect = () => { const r = document.querySelector('[data-diffmap-layer="multiply"]').getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
   // synthetic pointer events, same in every driver
   window.__move = (x, y) => {
@@ -51,7 +53,7 @@
   window.__rects = () => Object.fromEntries(['img', 'cap', 'title', 'dark', 'swatches'].map((id) => {
     const r = document.getElementById(id).getBoundingClientRect(); return [id, [r.left, r.top, r.right, r.bottom]];
   }));
-  window.__overlayReady = () => window.__dm.inspect().media.every((m) => m.state === 'ready');
+  window.__overlayReady = () => window.__dm.inspect().media.every((m) => m.state === 'ready' || m.state === 'skip');
 </script>
 </body>
 </html>

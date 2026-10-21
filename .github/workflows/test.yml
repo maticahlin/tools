@@ -1,0 +1,58 @@
+name: test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --omit=optional
+      - run: npm test
+      - run: npm run build
+      - name: Types
+        run: npx tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2020 --lib es2020,dom packages/diffmap/test/types/usage.ts
+      - name: CLI smoke test
+        working-directory: ${{ runner.temp }}
+        run: |
+          node $GITHUB_WORKSPACE/packages/diffmap/bin/diffmap.js setup --swap "#ff1408,#fff" --text "" --json
+          node $GITHUB_WORKSPACE/packages/diffmap/bin/diffmap.js check
+
+  # Real browsers on the three desktop systems. Screenshots are compared to the math per pixel.
+  pixel:
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        browser: [chromium, firefox, webkit]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --omit=optional
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run build
+      - name: Pixel test (sources)
+        run: node packages/diffmap/test/pixel.mjs ${{ matrix.browser }}
+      - name: Pixel test (minified bundle, swap palette)
+        run: node packages/diffmap/test/pixel.mjs ${{ matrix.browser }}
+        env: { DIST: '1', PALETTES: swap }
+      - name: Brand label (pilotprojekt case)
+        run: node packages/diffmap/test/pilot.mjs ${{ matrix.browser }}
+      - name: Blend check screenshot
+        if: always()
+        run: node packages/diffmap/test/blend-check.mjs ${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ matrix.os }}-${{ matrix.browser }}
+          path: packages/diffmap/test/out/
+          retention-days: 14

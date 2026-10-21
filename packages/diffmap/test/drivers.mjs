@@ -15,7 +15,7 @@ export function serve() {
   return new Promise((res) => {
     const s = http.createServer((req, rsp) => {
       let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-      if (p.startsWith('/test/') || p.startsWith('/src/') || p.startsWith('/setup/')) {
+      if (p.startsWith('/test/') || p.startsWith('/src/') || p.startsWith('/setup/') || p.startsWith('/dist/')) {
         const f = path.join(ROOT, p);
         if (fs.existsSync(f)) {
           const type = TYPES[path.extname(f)] ?? 'application/octet-stream';

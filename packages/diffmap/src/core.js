@@ -148,6 +148,51 @@ export function lookup(n, [r, g, b]) {
 
 const lerp = (a, b, t) => a + (b - a) * t;
 
+// ---------------------------------------------------------------- image recolor kernel
+//
+// Self-contained on purpose (no outside references): the runtime also ships it to a Web
+// Worker as source text, so big images recolor off the main thread.
+
+/** Parameters for recolorPixels from a resolved palette. */
+export function recolorParams(resolved) {
+  const n = resolved.nodes;
+  return {
+    n: [n.black, n.red, n.green, n.blue, n.yellow, n.magenta, n.cyan, n.white].flat(),
+    a: [...resolved.fallback.a], d: [...resolved.fallback.d],
+    p3: resolved.space === 'display-p3' ? SRGB_TO_P3.flat() : null,
+  };
+}
+
+/** RGBA bytes in place: node map (sRGB) → blending space → pre-corrected for the layers. */
+export function recolorPixels(px, { n, a, d, p3 }) {
+  const dec = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const enc = (v) => (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055);
+  const lut = new Float32Array(256);
+  for (let i = 0; i < 256; i++) lut[i] = i / 255;
+  const m = [0, 0, 0];
+  for (let i = 0; i < px.length; i += 4) {
+    const r = lut[px[i]], g = lut[px[i + 1]], b = lut[px[i + 2]];
+    for (let ch = 0; ch < 3; ch++) {
+      // trilinear over the 8 corners: black red green blue yellow magenta cyan white
+      const k = (corner) => n[corner * 3 + ch];
+      const c00 = k(0) + (k(1) - k(0)) * r, c10 = k(2) + (k(4) - k(2)) * r;
+      const c01 = k(3) + (k(5) - k(3)) * r, c11 = k(6) + (k(7) - k(6)) * r;
+      const lo = c00 + (c10 - c00) * g, hi = c01 + (c11 - c01) * g;
+      m[ch] = lo + (hi - lo) * b;
+    }
+    if (p3) {
+      const L = [dec(Math.max(0, m[0])), dec(Math.max(0, m[1])), dec(Math.max(0, m[2]))];
+      for (let ch = 0; ch < 3; ch++) m[ch] = enc(Math.max(0, p3[ch * 3] * L[0] + p3[ch * 3 + 1] * L[1] + p3[ch * 3 + 2] * L[2]));
+    }
+    for (let ch = 0; ch < 3; ch++) {
+      let v = Math.abs(d[ch]) < 1e-6 ? 0 : (m[ch] - a[ch]) / d[ch];
+      v = v < 0 ? 0 : v > 1 ? 1 : v;
+      px[i + ch] = v * 255 + 0.5;
+    }
+  }
+  return px;
+}
+
 // ---------------------------------------------------------------- fallback (engine 1)
 //
 // The fallback is a per-channel map  F(x) = clamp(a + d·x)  with any real a and d.

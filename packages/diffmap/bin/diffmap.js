@@ -87,9 +87,12 @@ Other
   vendor() {
     const dir = path.resolve(flags._?.[0] ?? 'public/diffmap');
     fs.mkdirSync(dir, { recursive: true });
-    for (const f of ['index.js', 'core.js']) fs.copyFileSync(path.join(PKG, 'src', f), path.join(dir, f === 'index.js' ? 'diffmap.js' : f));
+    // one self-contained file: the minified bundle when it's there, the sources otherwise
+    const bundle = path.join(PKG, 'dist/diffmap.min.js');
+    if (fs.existsSync(bundle)) fs.copyFileSync(bundle, path.join(dir, 'diffmap.js'));
+    else for (const f of ['index.js', 'core.js']) fs.copyFileSync(path.join(PKG, 'src', f), path.join(dir, f === 'index.js' ? 'diffmap.js' : f));
     const rel = path.relative(process.cwd(), dir).split(path.sep).join('/');
-    console.log(`Copied the runtime to ${rel}/ (diffmap.js + core.js).
+    console.log(`Copied the runtime to ${rel}/.
 
 Add this before </body>, with the config next to your pages:
   <script type="module" src="/${rel.replace(/^public\//, '')}/diffmap.js" data-diffmap-config="/diffmap.config.json"></script>`);

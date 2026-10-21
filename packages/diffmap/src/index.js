@@ -1,9 +1,9 @@
 // diffmap — a difference cursor whose colors you control.
-// Zero dependencies. ~3 KB min+gz. See README.md for the full guide.
+// Zero dependencies. About 11.5 KB min+gzip. See README.md for the full guide.
 
 import {
   resolvePalette, lookup, precorrect, layersAt, edgeStops, kindOf, activeLayers, AFFINE, CLAMPED,
-  cssColor, detectSpace,
+  cssColor, detectSpace, recolorPixels, recolorParams,
 } from './core.js';
 
 export * from './core.js';
@@ -91,7 +91,7 @@ export function diffmap(options = {}) {
     el.style.transform = mode === 'fixed' ? `translate3d(${x}px, ${y}px, 0)` : `translate(${x}px, ${y}px)`;
   };
 
-  const shape = createShape(opt.cursor ?? {}, { mkLayer, move, edge: opt.edge, space });
+  const shape = createShape(opt.cursor ?? {}, { mkLayer, move, edge: opt.edge, space, kick: () => kick() });
   const paintLayers = (fb, duotone) => shape.paint(fb, duotone);
   paintLayers(shown, current.duotone);
   if (shape.static) opt.transition = 0; // bitmap shapes repaint per palette, so palettes switch instantly
@@ -162,8 +162,10 @@ export function diffmap(options = {}) {
 
   function kick() { if (!raf) raf = requestAnimationFrame(frame); }
 
+  const perf = { frames: 0, ms: 0, worst: 0 };
   function frame(now) {
     raf = 0;
+    const t0 = performance.now();
     const e = opt.ease;
     pos.x += (target.x - pos.x) * e;
     pos.y += (target.y - pos.y) * e;
@@ -185,6 +187,8 @@ export function diffmap(options = {}) {
     const reveal = shape.place(pos.x, pos.y, pos.size);
 
     media.update(reveal);
+    const dt = performance.now() - t0;
+    perf.frames++; perf.ms += dt; if (dt > perf.worst) perf.worst = dt;
     if (!settled || tween || media.busy()) kick();
   }
 
@@ -205,7 +209,10 @@ export function diffmap(options = {}) {
     /** re-scan the page for new media elements */
     refresh() { media.scan(); },
     /** what happened to each image/video: ready, loading, working, tainted (CORS), skip */
-    inspect() { return { mode, space, media: media.inspect() }; },
+    inspect() {
+      return { mode, space, media: media.inspect(),
+        perf: { frames: perf.frames, avgMs: perf.frames ? perf.ms / perf.frames : 0, worstMs: perf.worst } };
+    },
     destroy() {
       cancelAnimationFrame(raf);
       removeEventListener('pointermove', onMove);
@@ -273,10 +280,11 @@ function circleShape({ mkLayer, move, edge = 1.25, space }) {
   lum.style.backgroundColor = '#808080';
   const set = layerSet(mkLayer);
   let p = null, stops = [], duo = false, last = '';
+  const cache = new Map(); // radius → gradient stop lists
 
   return {
     paint(fb, duotone) {
-      p = plan(fb); duo = duotone; last = '';
+      p = plan(fb); duo = duotone; last = ''; cache.clear();
       lum.style.display = duo ? '' : 'none';
       set.ensure(p.blends);
       // gradient stops: every branch switch twice (both sides), plus samples in between
@@ -288,16 +296,24 @@ function circleShape({ mkLayer, move, edge = 1.25, space }) {
       const s = Math.min(edge, r);
       const side = snapUp(2 * r + 4);
       const left = snap(x - side / 2), top = snap(y - side / 2);
-      const cx = x - left, cy = y - top;
-      const key = `${side}|${cx.toFixed(3)}|${cy.toFixed(3)}|${r}`;
+      // the center only needs 1/16 px; the stop lists only depend on the radius, so they're cached
+      const cx = Math.round((x - left) * 16) / 16, cy = Math.round((y - top) * 16) / 16;
+      const key = `${side}|${cx}|${cy}|${r}`;
       if (key !== last) {
         last = key;
-        const lists = p.blends.map(() => []);
-        for (const { t, cols } of stops) cols.forEach((c, L) => lists[L].push(`${rgb(c)} ${(r - s * t).toFixed(3)}px`));
-        const at = `circle at ${cx.toFixed(3)}px ${cy.toFixed(3)}px${interp}`;
+        let lists = cache.get(r);
+        if (!lists) {
+          lists = p.blends.map(() => []);
+          for (const { t, cols } of stops) cols.forEach((c, L) => lists[L].push(`${rgb(c)} ${(r - s * t).toFixed(3)}px`));
+          lists = lists.map((l) => l.join(', '));
+          if (cache.size > 64) cache.clear();
+          cache.set(r, lists);
+        }
+        const at = `circle at ${cx}px ${cy}px${interp}`;
         set.els.forEach((el, L) => {
-          el.style.width = el.style.height = side + 'px';
-          el.style.backgroundImage = `radial-gradient(${at}, ${lists[L].join(', ')})`;
+          const wh = side + 'px';
+          if (el.style.width !== wh) el.style.width = el.style.height = wh;
+          el.style.backgroundImage = `radial-gradient(${at}, ${lists[L]})`;
         });
       }
       for (const el of set.els) move(el, left, top);
@@ -311,7 +327,7 @@ function circleShape({ mkLayer, move, edge = 1.25, space }) {
 // Text: the glyphs' anti-aliasing coverage becomes the effect strength t, baked per pixel
 // into one bitmap per layer at device resolution. Exact for any glyph shape.
 // The text can change: elements with data-diffmap-text="…" show their own label.
-function textShape(cursor, { mkLayer, move, space }) {
+function textShape(cursor, { mkLayer, move, space, kick = () => {} }) {
   const font = cursor.font ?? '700 72px Arial, Helvetica, sans-serif';
   const lineHeight = cursor.lineHeight ?? 1.2;
   const maxWidth = cursor.maxWidth ?? Infinity;
@@ -361,37 +377,48 @@ function textShape(cursor, { mkLayer, move, space }) {
     glyphs = { cov: ctx.getImageData(0, 0, w, h).data, w, h, W: w / k, H: h / k, maskUrl: c.toDataURL() };
   }
 
+  // Bitmaps are PNG-encoded with toBlob (async, mostly off the main thread); the new geometry
+  // goes live together with the new bitmaps, so a label change never shows mismatched layers.
+  let shown = null, urls = [], bakeGen = 0;
   function bake() {
-    if (!glyphs || !fb) return;
+    if (!glyphs || !fb) { shown = null; kick(); return; }
     const p = plan(fb);
-    const els = set.ensure(p.blends, bg);
-    const { cov, w, h, W, H } = glyphs;
+    const g = glyphs, my = ++bakeGen;
+    const { cov, w, h } = g;
     const table = Array.from({ length: 256 }, (_, a) => p.at(a / 255));
-    const tmp = document.createElement('canvas');
-    tmp.width = w; tmp.height = h;
-    const tctx = tmp.getContext('2d');
-    els.forEach((el, L) => {
+    const blobs = p.blends.map((_, L) => {
       const data = new Uint8ClampedArray(w * h * 4);
       for (let i = 0; i < cov.length; i += 4) {
         const col = table[cov[i + 3]][L];
         data[i] = col[0] * 255 + 0.5; data[i + 1] = col[1] * 255 + 0.5; data[i + 2] = col[2] * 255 + 0.5; data[i + 3] = 255;
       }
-      el.style.width = W + 'px'; el.style.height = H + 'px';
-      // Always a plain background image, never a <canvas> element: WebKit gives canvases their
-      // own compositing layer and then doesn't blend them with the page. In P3 the PNG comes
-      // from a P3 canvas, so it carries the Display P3 numbers as they are.
-      const cv = space === 'srgb' ? tmp : Object.assign(document.createElement('canvas'), { width: w, height: h });
-      const cx = space === 'srgb' ? tctx : cv.getContext('2d', { colorSpace: space });
+      // Always a plain background image, never a <canvas> element in the layer. In P3 the PNG
+      // comes from a P3 canvas, so it carries the Display P3 numbers as they are.
+      const cv = Object.assign(document.createElement('canvas'), { width: w, height: h });
+      const cx = cv.getContext('2d', space === 'srgb' ? undefined : { colorSpace: space });
       cx.putImageData(space === 'srgb' ? new ImageData(data, w, h) : new ImageData(data, w, h, { colorSpace: space }), 0, 0);
-      el.style.backgroundImage = `url("${cv.toDataURL()}")`;
+      return new Promise((res) => cv.toBlob(res));
     });
-    lum.style.width = W + 'px'; lum.style.height = H + 'px';
-    for (const pr of ['maskImage', 'webkitMaskImage']) lum.style[pr] = `url("${glyphs.maskUrl}")`;
-    for (const pr of ['maskSize', 'webkitMaskSize']) lum.style[pr] = '100% 100%';
+    Promise.all(blobs).then((list) => {
+      if (my !== bakeGen) return;
+      const els = set.ensure(p.blends, bg);
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      urls = list.map((b) => URL.createObjectURL(b));
+      els.forEach((el, L) => {
+        el.style.width = g.W + 'px'; el.style.height = g.H + 'px';
+        el.style.backgroundImage = `url("${urls[L]}")`;
+      });
+      lum.style.width = g.W + 'px'; lum.style.height = g.H + 'px';
+      for (const pr of ['maskImage', 'webkitMaskImage']) lum.style[pr] = `url("${g.maskUrl}")`;
+      for (const pr of ['maskSize', 'webkitMaskSize']) lum.style[pr] = '100% 100%';
+      shown = g;
+      kick();
+    });
   }
 
   // web fonts: re-render once the face is ready, so the bitmap isn't drawn in the fallback font
-  const ready = () => document.fonts?.load ? document.fonts.load(font, text || 'a').catch(() => {}) : Promise.resolve();
+  const loaded = () => !document.fonts?.check || document.fonts.check(font, text || 'a');
+  const ready = () => (loaded() ? null : document.fonts.load(font, text || 'a').catch(() => {}));
 
   return {
     static: true,
@@ -401,7 +428,7 @@ function textShape(cursor, { mkLayer, move, space }) {
       text = str;
       const my = ++gen;
       render(); bake();
-      ready().then(() => { if (my === gen) { render(); bake(); } });
+      ready()?.then(() => { if (my === gen) { render(); bake(); } });
     },
     paint(next, duotone) {
       fb = next; duo = duotone;
@@ -409,16 +436,17 @@ function textShape(cursor, { mkLayer, move, space }) {
       if (!glyphs) render();
       bake();
       const my = ++gen;
-      ready().then(() => { if (my === gen) { render(); bake(); } });
+      ready()?.then(() => { if (my === gen) { render(); bake(); } });
     },
     place(x, y, size) {
-      if (size < 0.5 || !glyphs) { for (const el of [lum, ...set.els]) move(el, -9999, -9999); return null; }
-      const left = snap(x - glyphs.W / 2), top = snap(y - glyphs.H / 2);
+      const g = shown;
+      if (size < 0.5 || !g) { for (const el of [lum, ...set.els]) move(el, -9999, -9999); return null; }
+      const left = snap(x - g.W / 2), top = snap(y - g.H / 2);
       for (const el of set.els) move(el, left, top);
       if (duo) move(lum, left, top); else move(lum, -9999, -9999);
-      return { kind: 'mask', url: glyphs.maskUrl, left, top, w: glyphs.W, h: glyphs.H };
+      return { kind: 'mask', url: g.maskUrl, left, top, w: g.W, h: g.H };
     },
-    destroy() { lum.remove(); set.remove(); },
+    destroy() { lum.remove(); set.remove(); urls.forEach((u) => URL.revokeObjectURL(u)); },
   };
 }
 
@@ -462,6 +490,45 @@ function imageShape(cursor, { mkLayer, move, space }) {
     },
     destroy() { pic.remove(); lum.remove(); set.remove(); },
   };
+}
+
+// =====================================================================================
+// Recoloring images off the main thread. One shared worker built from the kernel's own
+// source; if a site's CSP forbids blob: workers, the same kernel runs here in slices.
+
+let worker = null, workerBroken = false, jobId = 0;
+const jobs = new Map();
+
+function getWorker() {
+  if (worker || workerBroken || typeof Worker === 'undefined') return worker;
+  try {
+    const src = `const recolorPixels = ${recolorPixels.toString()};
+onmessage = (e) => { const { id, buf, params } = e.data; recolorPixels(new Uint8ClampedArray(buf), params); postMessage({ id, buf }, [buf]); };`;
+    worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    worker.onmessage = (e) => { const done = jobs.get(e.data.id); jobs.delete(e.data.id); done?.(new Uint8ClampedArray(e.data.buf)); };
+    worker.onerror = () => { workerBroken = true; worker = null; for (const done of jobs.values()) done(null); jobs.clear(); };
+  } catch { workerBroken = true; worker = null; }
+  return worker;
+}
+
+/** Resolves with the recolored pixels, or null if the worker failed mid-job (the buffer was handed over). */
+function recolorAsync(px, params) {
+  const w = getWorker();
+  if (w) {
+    return new Promise((res) => {
+      const id = jobId++;
+      jobs.set(id, res);
+      w.postMessage({ id, buf: px.buffer, params }, [px.buffer]);
+    });
+  }
+  return (async () => {
+    const step = 4 * 32768; // ~2 ms slices
+    for (let i = 0; i < px.length; i += step) {
+      recolorPixels(px.subarray(i, i + step), params);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return px;
+  })();
 }
 
 // Only WebKitGTK / WPE (Linux) refuse to blend composited layers, so only they get the
@@ -534,46 +601,40 @@ function createMedia(opt, pal, areaPalette) {
         console.info('[diffmap] image is cross-origin without CORS, using the fallback only:', src);
         return;
       }
-      recolor(data.data, it.palette);
-      let out = c;
-      if (space !== 'srgb') {
-        // the pre-corrected pixels are Display P3 numbers: encode them from a P3 canvas
-        out = Object.assign(document.createElement('canvas'), { width: w, height: h });
-        out.getContext('2d', { colorSpace: space }).putImageData(new ImageData(data.data, w, h, { colorSpace: space }), 0, 0);
-      } else ctx.putImageData(data, 0, 0);
-      out.toBlob((blob) => {
-        if (!blob || !items.has(el)) return;
-        // A plain div with a background, not an <img>/<canvas>: WebKit may give those their
-        // own compositing layer, and blend modes can't see into separate layers there.
-        const url = URL.createObjectURL(blob);
-        const pre = new Image();
-        pre.src = url;
-        const done = () => {
-          if (!items.has(el)) return URL.revokeObjectURL(url);
-          const ov = document.createElement('div');
-          ov.style.backgroundImage = `url("${url}")`;
-          ov.style.backgroundRepeat = 'no-repeat';
-          ov.style.backgroundOrigin = ov.style.backgroundClip = 'content-box';
-          it.url = url;
-          mount(it, ov);
-          it.state = 'ready';
-        };
-        (pre.decode ? pre.decode() : Promise.resolve()).then(done, done);
+      const params = recolorParams(it.palette);
+      recolorAsync(data.data, params).then((px) => {
+        if (!px) { it.state = null; prepare(it); return; } // the worker died: redo it on this thread
+        if (!items.has(el)) return;
+        let out = c;
+        if (space !== 'srgb') {
+          // the pre-corrected pixels are Display P3 numbers: encode them from a P3 canvas
+          out = Object.assign(document.createElement('canvas'), { width: w, height: h });
+          out.getContext('2d', { colorSpace: space }).putImageData(new ImageData(px, w, h, { colorSpace: space }), 0, 0);
+        } else ctx.putImageData(new ImageData(px, w, h), 0, 0);
+        out.toBlob((blob) => {
+          if (!blob || !items.has(el)) return;
+          // A plain div with a background, not an <img>/<canvas>: WebKit may give those their
+          // own compositing layer, and blend modes can't see into separate layers there.
+          const url = URL.createObjectURL(blob);
+          const pre = new Image();
+          pre.src = url;
+          const done = () => {
+            if (!items.has(el)) return URL.revokeObjectURL(url);
+            const ov = document.createElement('div');
+            ov.style.backgroundImage = `url("${url}")`;
+            ov.style.backgroundRepeat = 'no-repeat';
+            ov.style.backgroundOrigin = ov.style.backgroundClip = 'content-box';
+            it.url = url;
+            mount(it, ov);
+            it.state = 'ready';
+          };
+          (pre.decode ? pre.decode() : Promise.resolve()).then(done, done);
+        });
       });
     };
     // `complete` only means loaded: WebKit can still draw an undecoded image as nothing
     const idle = window.requestIdleCallback ?? ((f) => setTimeout(f, 1));
     (el.decode ? el.decode() : Promise.resolve()).then(() => idle(run), () => idle(run));
-  }
-
-  function recolor(px, p) {
-    const c = [0, 0, 0], out = [0, 0, 0];
-    // a 33³ cache would be faster for huge images; trilinear is already cheap
-    for (let i = 0; i < px.length; i += 4) {
-      c[0] = px[i] / 255; c[1] = px[i + 1] / 255; c[2] = px[i + 2] / 255;
-      precorrect(p.fallback, p.toSpace(lookup(p.nodes, c)), out);
-      px[i] = out[0] * 255 + 0.5; px[i + 1] = out[1] * 255 + 0.5; px[i + 2] = out[2] * 255 + 0.5;
-    }
   }
 
   function mount(it, ov) {

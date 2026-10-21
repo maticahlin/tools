@@ -152,7 +152,7 @@ for (const engine of engines) {
   for (const cur of cursors) for (const [name, palette] of Object.entries(PALETTES).filter(([n]) => !process.env.PALETTES || process.env.PALETTES.split(',').includes(n))) {
     if (cur !== 'circle' && name === 'classic') continue;
     const pal = resolvePalette(palette);
-    await d.open(`${url}?cur=${cur}&pos=${process.env.POS || 'auto'}&video=${process.env.VIDEO ? 1 : ''}&size=${2 * R}&p=${encodeURIComponent(JSON.stringify(palette))}`);
+    await d.open(`${url}?cur=${cur}&pos=${process.env.POS || 'auto'}&dist=${process.env.DIST ? 1 : ''}&video=${process.env.VIDEO ? 1 : ''}&size=${2 * R}&p=${encodeURIComponent(JSON.stringify(palette))}`);
     for (let i = 0; i < 50 && !(await d.eval('document.readyState === "complete" && !!window.__dm')); i++) await sleep(100);
     const rects = await d.eval('window.__rects()');
     const ic = [(rects.img[0] + rects.img[2]) / 2, (rects.img[1] + rects.img[3]) / 2];

@@ -1,3 +1,4 @@
 node_modules/
 packages/*/test/out/
 .DS_Store
+packages/*/dist/

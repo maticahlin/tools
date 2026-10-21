@@ -32,7 +32,7 @@
     window.__dm = diffmap({
       palette: { mode: 'swap', colors: ['#ff1408', '#ffffff'] },
       cursor: { text: q.get('label') || 'Vrtec Ljubljana', font: `700 ${px}px Arial, Helvetica, sans-serif` },
-      force: true, ease: 1, grow: false, transition: 0,
+      force: true, ease: 1, grow: false, transition: 0, colorSpace: q.get('space') || 'srgb',
     });
     window.__move = (x, y) => {
       const t = document.elementFromPoint(x, y) || document.body;

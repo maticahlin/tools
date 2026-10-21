@@ -2,13 +2,20 @@
   "name": "maticahlin-tools",
   "private": true,
   "description": "Building blocks for websites, from tools.maticahlin.com",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "test": "npm test --workspaces"
+    "test": "npm test --workspaces",
+    "build": "npm run build --workspaces"
   },
   "devDependencies": {
-    "@sparticuz/chromium": "*",
+    "esbuild": "^0.25.0",
     "playwright": "1.56.0",
-    "pngjs": "^7.0.0"
+    "pngjs": "^7.0.0",
+    "typescript": "^5.6.3"
+  },
+  "optionalDependencies": {
+    "@sparticuz/chromium": "^153.0.0"
   }
 }

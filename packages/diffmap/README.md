@@ -7,7 +7,7 @@ The classic `mix-blend-mode: difference` cursor inverts whatever is under it —
 - **8 editable nodes.** Black, white, red, green, blue, cyan, magenta and yellow each turn into a color you pick. Everything in between is interpolated.
 - **Any content.** Text, images, video, text over images, images over images.
 - **Every major browser.** Chrome, Edge, Firefox, Safari on Windows, macOS and Linux. No canvas screenshots of the page, no html2canvas.
-- **Small.** No dependencies, a few KB.
+- **Small.** No dependencies; 11.5 KB gzipped (26 KB minified), and only 4 KB if you just need the color math (`/core`).
 - **Agent-friendly setup.** `npx @maticahlin/diffmap setup` opens a local editor; flags let coding agents do it without a browser.
 
 ## The case that started it: brand red ↔ white
@@ -179,6 +179,16 @@ Coding agents: see [AGENTS.md](./AGENTS.md).
 `test/blend-check.html` renders 22 techniques next to what they should look like. Open it in any browser to see what that browser blends and in which color space (boxes 6 vs 7).
 
 WebKitGTK (Linux) only blends layers that aren't composited on their own, so there diffmap moves the layers with 2D transforms inside a scroll-following box (`position: "absolute"`). Everywhere else, Safari included, it uses `position: fixed`. On WebKitGTK a `<video>` anywhere on the page also stops blending for the whole page.
+
+## Performance
+
+Measured with `npm run bench` in headless Chromium in a Linux container (your numbers will differ by machine):
+
+- **Per cursor frame:** about 0.2 ms of JavaScript (worst frame under 1 ms with the circle). Gradient stops are cached per radius, so moving the cursor only updates its center.
+- **Images:** recolored once, in a Web Worker, when they scroll into view. A 640×420 photo is ready in about 0.1 s and a 2400×1600 one in about 0.45 s, costing at most one dropped frame on the main thread. If a site's Content Security Policy blocks workers, the same code runs on the main thread in 2 ms slices.
+- **Text cursor:** label bitmaps are encoded asynchronously, and a new label goes live together with its size, so it never flickers.
+
+What the benchmark can't see is the GPU cost of compositing the blend layers. It is the same kind of work as any `mix-blend-mode` cursor, with 1 to 8 small layers instead of 1.
 
 ## Development
 

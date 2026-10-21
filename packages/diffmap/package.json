@@ -6,18 +6,53 @@
   "license": "MIT",
   "author": "Matic Ahlin (https://tools.maticahlin.com)",
   "homepage": "https://tools.maticahlin.com/diffmap",
-  "keywords": ["cursor", "mix-blend-mode", "difference", "gradient map", "duotone", "hover effect"],
+  "keywords": [
+    "cursor",
+    "mix-blend-mode",
+    "difference",
+    "gradient map",
+    "duotone",
+    "hover effect"
+  ],
   "exports": {
-    ".": "./src/index.js",
-    "./core": "./src/core.js"
+    ".": {
+      "types": "./src/index.d.ts",
+      "browser": "./dist/diffmap.min.js",
+      "default": "./src/index.js"
+    },
+    "./core": {
+      "types": "./src/core.d.ts",
+      "default": "./src/core.js"
+    },
+    "./dist/*": "./dist/*"
   },
   "main": "./src/index.js",
-  "bin": { "diffmap": "./bin/diffmap.js" },
-  "files": ["src", "bin", "setup/index.html", "setup/dusk.jpg", "setup/temeraire.jpg", "agents", "AGENTS.md", "README.md"],
+  "bin": {
+    "diffmap": "./bin/diffmap.js"
+  },
+  "files": [
+    "src",
+    "dist",
+    "bin",
+    "setup/index.html",
+    "setup/dusk.jpg",
+    "setup/temeraire.jpg",
+    "agents",
+    "AGENTS.md",
+    "README.md",
+    "LICENSE"
+  ],
   "sideEffects": true,
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
+    "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.js",
-    "test:pixel": "node test/pixel.mjs chromium webkit firefox"
-  }
+    "test:pixel": "node test/pixel.mjs chromium webkit firefox",
+    "test:pilot": "node test/pilot.mjs chromium webkit firefox",
+    "bench": "node test/bench.mjs chromium",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "types": "./src/index.d.ts"
 }

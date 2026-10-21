@@ -235,3 +235,19 @@ test('same on every platform: swap math done in the blending space is exact in b
   const srgbMath = resolvePalette({ mode: 'swap', colors: ['#ff1408', '#ffffff'] }, { space: 'srgb' });
   assert.ok(lv(blendIn('display-p3', { fb: srgbMath.fallback }, red), white) > 10);
 });
+
+import { recolorPixels, recolorParams } from '../src/core.js';
+
+test('recolor kernel matches lookup → space → precorrect, in sRGB and P3', () => {
+  for (const space of ['srgb', 'display-p3']) {
+    const r = resolvePalette({ nodes: { red: '#ffd400', green: '#2b2bd9', blue: '#ff2f7a', black: '#f4efe6', white: '#141414' }, anchors: ['#000', '#fff'] }, { space });
+    const px = new Uint8ClampedArray(4 * 500);
+    for (let i = 0; i < px.length; i++) px[i] = Math.floor(rand() * 256);
+    const ref = Uint8ClampedArray.from(px);
+    recolorPixels(px, recolorParams(r));
+    for (let i = 0; i < px.length; i += 4) {
+      const want = precorrect(r.fallback, r.toSpace(lookup(r.nodes, [ref[i] / 255, ref[i + 1] / 255, ref[i + 2] / 255])));
+      for (let ch = 0; ch < 3; ch++) assert.ok(Math.abs(px[i + ch] - Math.round(want[ch] * 255)) <= 1, `${space} ${px[i + ch]} vs ${want[ch] * 255}`);
+    }
+  }
+});
