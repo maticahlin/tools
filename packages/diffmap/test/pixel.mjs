@@ -70,7 +70,7 @@ function allowedMix(pal, b, onImage) {
 const stat = (arr) => {
   if (!arr.length) return null;
   const s = [...arr].sort((p, q) => p - q);
-  return { n: s.length, mean: +(s.reduce((p, q) => p + q, 0) / s.length).toFixed(2), p99: +s[Math.floor(s.length * 0.99)].toFixed(1), max: +s[s.length - 1].toFixed(1) };
+  return { n: s.length, mean: +(s.reduce((p, q) => p + q, 0) / s.length).toFixed(2), p99: +s[Math.floor(s.length * 0.99)].toFixed(1), max: +s[s.length - 1].toFixed(1), over8: s.filter((v) => v > 8).length };
 };
 
 function crop(png, l, t, w, h) {
@@ -146,8 +146,11 @@ const report = [];
 let failed = false;
 const annotate = [];
 const paint = PNG.sync.read(fs.readFileSync(path.join(ROOT, 'test/fixture/paint.png')));
-const fmt = (s) => (s ? `p99 ${s.p99} max ${s.max}` : '—');
-const okErr = (s) => !s || (s.p99 <= 3 && s.max <= 8);
+const fmt = (s) => (s ? `p99 ${s.p99} max ${s.max}${s.over8 ? ` (${s.over8} px > 8)` : ''}` : '—');
+// Strict on the math, tolerant of a handful of re-rasterized glyph edges: Firefox on Windows
+// draws text a hair differently while a blend layer covers it (7 of 51,040 pixels in CI), and
+// that's the browser, not diffmap. A wrong formula moves thousands of pixels, not a few.
+const okErr = (s) => !s || (s.p99 <= 3 && (s.max <= 8 || s.over8 <= Math.max(2, s.n * 0.0005)));
 const okRim = (s) => !s || s.max <= 6;
 
 for (const engine of engines) {
