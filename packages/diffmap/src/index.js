@@ -14,7 +14,7 @@ const DEFAULTS = {
   ease: 0.2,                // follow smoothing per frame, 1 = glued to the mouse
   media: 'img[data-diffmap], video[data-diffmap]', // images/video that get the full node map; true = all
   hideCursor: false,        // hide the native cursor while diffmap is active
-  position: 'auto',         // 'fixed' | 'absolute' | 'auto' (absolute on Safari/WebKit, fixed elsewhere)
+  position: 'auto',         // 'fixed' | 'absolute' | 'auto' (absolute on Linux WebKit, fixed elsewhere)
   edge: 1.25,               // circle: px over which the effect fades out at the rim (anti-aliasing without fringes)
   cursor: null,             // null = circle, { text, font }, or { image, width }
   colorSpace: 'auto',       // 'auto' | 'srgb' | 'display-p3': the space this browser blends in
@@ -464,9 +464,12 @@ function imageShape(cursor, { mkLayer, move, space }) {
   };
 }
 
+// Only WebKitGTK / WPE (Linux) refuse to blend composited layers, so only they get the
+// absolute strategy. Safari on macOS blends fixed, translate3d and will-change layers fine
+// (checked with test/blend-check.html), and the absolute box broke it there.
 function isWebKit() {
   const ua = navigator.userAgent;
-  return /AppleWebKit/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS|SamsungBrowser/.test(ua);
+  return /AppleWebKit/.test(ua) && /Linux|X11|WPE/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS|SamsungBrowser|Android/.test(ua);
 }
 
 // =====================================================================================

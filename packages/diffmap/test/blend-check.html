@@ -111,6 +111,15 @@
   cell(19, 'color-dodge #808080', (h) => stack(h, one('color-dodge', '#808080')), exp((v) => v.map((x) => (x === 0 ? 0 : Math.min(1, x / (1 - 128 / 255))))));
   cell(20, 'color #808080 (duotone)', (h) => stack(h, one('color', '#808080')), exp((v) => { const l = 0.3 * v[0] + 0.59 * v[1] + 0.11 * v[2]; return [l, l, l]; }));
 
+  // --- diffmap's own two positioning strategies, with the P3 swap stack
+  cell(21, 'swap stack (P3) in a fixed layer, translate3d', (h) => stack(h, P, (el) => { el.style.position = 'fixed'; el.style.transform = 'translate3d(0,0,0)'; el.style.willChange = 'transform'; el.dataset.fixed = ''; }), swapWant);
+  cell(22, 'swap stack (P3) inside an absolute overflow:clip box', (h) => {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:absolute;inset:0;overflow:clip;pointer-events:none';
+    h.append(box);
+    stack(box, P, (el) => { el.style.transform = 'translate(0px,0px)'; el.style.zIndex = '2147483000'; });
+  }, swapWant);
+
   // fixed layers follow their box
   const placeFixed = () => document.querySelectorAll('[data-fixed]').forEach((el) => {
     const r = el.parentElement.getBoundingClientRect();

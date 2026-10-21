@@ -42,7 +42,7 @@ diffmap does all of its math in the space the browser actually blends in, and wr
 - `colorSpace: "srgb"` or `"display-p3"` forces one.
 - The setup page has a **platform check**: two rows of squares, one per space. On your machine, the row whose squares match is the space your browser blends in. If auto picks the other one, set `colorSpace` and tell us your browser and OS.
 
-Status: verified in Chromium and WebKit with sRGB compositing; the Display P3 path is implemented and unit-tested against simulated P3 compositing, and needs the platform check on a real Mac.
+Status: confirmed on a real Mac: Safari 27 blends in Display P3, and diffmap's P3 math lands the swap colors exactly there, while sRGB math comes out visibly off (test/blend-check.html, boxes 6 and 7).
 
 ## Quick start
 
@@ -168,15 +168,17 @@ Coding agents: see [AGENTS.md](./AGENTS.md).
 
 ## Browser notes
 
-| | Blend layers | Images (node map) | Video (WebGL) |
-| --- | --- | --- | --- |
-| Chromium (Chrome, Edge, Arc, Opera) | ✓ tested | ✓ tested | ✓ tested |
-| WebKit (Safari) | ✓ tested on WebKitGTK | ✓ tested on WebKitGTK | needs a check on macOS Safari |
-| Firefox | needs a check | needs a check | needs a check |
+| | Blend layers | Images (node map) | Video (WebGL) | Blends in |
+| --- | --- | --- | --- | --- |
+| Chrome / Edge on Windows | ✓ checked by hand | ✓ | ✓ | sRGB |
+| Chrome on macOS | ✓ checked by hand | ✓ | ✓ | Display P3 on wide-gamut screens |
+| Safari 27 on macOS | ✓ every technique blends (test/blend-check.html) | needs a check | needs a check | Display P3 |
+| Chromium, WebKitGTK (Linux) | ✓ pixel-tested | ✓ pixel-tested | Chromium ✓ | sRGB |
+| Firefox | needs a check | needs a check | needs a check | ? |
 
-On WebKitGTK (Linux's GNOME Web), a `<video>` anywhere on the page stops blending for the whole page, because the video gets its own compositing layer. macOS Safari composites differently; that's the first thing to check there.
+`test/blend-check.html` renders 22 techniques next to what they should look like. Open it in any browser to see what that browser blends and in which color space (boxes 6 vs 7).
 
-WebKit only blends layers that aren't composited on their own, so on Safari diffmap moves the layers with 2D transforms inside a scroll-following box (`position: "absolute"`); elsewhere it uses `position: fixed`, which stays smoother while scrolling.
+WebKitGTK (Linux) only blends layers that aren't composited on their own, so there diffmap moves the layers with 2D transforms inside a scroll-following box (`position: "absolute"`). Everywhere else, Safari included, it uses `position: fixed`. On WebKitGTK a `<video>` anywhere on the page also stops blending for the whole page.
 
 ## Development
 
