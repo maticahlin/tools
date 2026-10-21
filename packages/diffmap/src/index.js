@@ -3,6 +3,7 @@
 
 import {
   resolvePalette, lookup, precorrect, layersAt, edgeStops, kindOf, activeLayers, AFFINE, CLAMPED,
+  cssColor, detectSpace,
 } from './core.js';
 
 export * from './core.js';
@@ -16,6 +17,7 @@ const DEFAULTS = {
   position: 'auto',         // 'fixed' | 'absolute' | 'auto' (absolute on Safari/WebKit, fixed elsewhere)
   edge: 1.25,               // circle: px over which the effect fades out at the rim (anti-aliasing without fringes)
   cursor: null,             // null = circle, { text, font }, or { image, width }
+  colorSpace: 'auto',       // 'auto' | 'srgb' | 'display-p3': the space this browser blends in
   zIndex: 2147483000,
   transition: 220,          // ms to tween between palettes
 };
@@ -39,7 +41,9 @@ export function diffmap(options = {}) {
   // ---- palettes
   const raw = { default: options.palette ?? {}, ...(options.palettes ?? {}) };
   const resolved = {};
-  const pal = (name) => (resolved[name] ??= resolvePalette(raw[name] ?? raw.default));
+  // the color space this browser blends in (sRGB, or Display P3 on wide-gamut Macs)
+  const space = opt.colorSpace === 'srgb' || opt.colorSpace === 'display-p3' ? opt.colorSpace : detectSpace();
+  const pal = (name) => (resolved[name] ??= resolvePalette(raw[name] ?? raw.default, { space }));
   let current = pal('default');
   const copy = (fb) => ({ a: [...fb.a], d: [...fb.d] });
   let shown = copy(current.fallback);
@@ -87,7 +91,7 @@ export function diffmap(options = {}) {
     el.style.transform = mode === 'fixed' ? `translate3d(${x}px, ${y}px, 0)` : `translate(${x}px, ${y}px)`;
   };
 
-  const shape = createShape(opt.cursor ?? {}, { mkLayer, move, edge: opt.edge });
+  const shape = createShape(opt.cursor ?? {}, { mkLayer, move, edge: opt.edge, space });
   const paintLayers = (fb, duotone) => shape.paint(fb, duotone);
   paintLayers(shown, current.duotone);
   if (shape.static) opt.transition = 0; // bitmap shapes repaint per palette, so palettes switch instantly
@@ -185,7 +189,7 @@ export function diffmap(options = {}) {
   }
 
   // ---- engine 2: images and video get the full node map
-  const media = createMedia(opt, pal, areaPalette);
+  const media = createMedia({ ...opt, space }, pal, areaPalette);
 
   return {
     enabled: true,
@@ -201,7 +205,7 @@ export function diffmap(options = {}) {
     /** re-scan the page for new media elements */
     refresh() { media.scan(); },
     /** what happened to each image/video: ready, loading, working, tainted (CORS), skip */
-    inspect() { return { mode, media: media.inspect() }; },
+    inspect() { return { mode, space, media: media.inspect() }; },
     destroy() {
       cancelAnimationFrame(raf);
       removeEventListener('pointermove', onMove);
@@ -222,7 +226,7 @@ export function diffmap(options = {}) {
 // a palette (paint), where to draw this frame (place), and which part of the page the
 // image overlays should reveal (place's return value).
 
-const rgb = (c) => `rgb(${c.map((v) => (v * 255).toFixed(2)).join(', ')})`;
+
 const dpr = () => window.devicePixelRatio || 1;
 const snap = (v) => Math.round(v * dpr()) / dpr();
 const snapUp = (v) => Math.ceil(v * dpr()) / dpr();
@@ -261,7 +265,9 @@ function layerSet(mkLayer) {
 
 // Circle: opaque squares on whole device pixels, each painted with a radial gradient
 // that carries the effect strength from 1 inside to 0 at the rim.
-function circleShape({ mkLayer, move, edge = 1.25 }) {
+function circleShape({ mkLayer, move, edge = 1.25, space }) {
+  const rgb = (c) => cssColor(c, space);
+  const interp = space === 'srgb' ? '' : ` in ${space}`; // interpolate the stops in the blending space
   const lum = mkLayer('color');            // duotone only: keeps the backdrop's luminance
   lum.style.borderRadius = '50%';
   lum.style.backgroundColor = '#808080';
@@ -288,7 +294,7 @@ function circleShape({ mkLayer, move, edge = 1.25 }) {
         last = key;
         const lists = p.blends.map(() => []);
         for (const { t, cols } of stops) cols.forEach((c, L) => lists[L].push(`${rgb(c)} ${(r - s * t).toFixed(3)}px`));
-        const at = `circle at ${cx.toFixed(3)}px ${cy.toFixed(3)}px`;
+        const at = `circle at ${cx.toFixed(3)}px ${cy.toFixed(3)}px${interp}`;
         set.els.forEach((el, L) => {
           el.style.width = el.style.height = side + 'px';
           el.style.backgroundImage = `radial-gradient(${at}, ${lists[L].join(', ')})`;
@@ -305,7 +311,7 @@ function circleShape({ mkLayer, move, edge = 1.25 }) {
 // Text: the glyphs' anti-aliasing coverage becomes the effect strength t, baked per pixel
 // into one bitmap per layer at device resolution. Exact for any glyph shape.
 // The text can change: elements with data-diffmap-text="…" show their own label.
-function textShape(cursor, { mkLayer, move }) {
+function textShape(cursor, { mkLayer, move, space }) {
   const font = cursor.font ?? '700 72px Arial, Helvetica, sans-serif';
   const lineHeight = cursor.lineHeight ?? 1.2;
   const maxWidth = cursor.maxWidth ?? Infinity;
@@ -365,14 +371,22 @@ function textShape(cursor, { mkLayer, move }) {
     tmp.width = w; tmp.height = h;
     const tctx = tmp.getContext('2d');
     els.forEach((el, L) => {
-      const img = tctx.createImageData(w, h), d = img.data;
+      const data = new Uint8ClampedArray(w * h * 4);
       for (let i = 0; i < cov.length; i += 4) {
         const col = table[cov[i + 3]][L];
-        d[i] = col[0] * 255 + 0.5; d[i + 1] = col[1] * 255 + 0.5; d[i + 2] = col[2] * 255 + 0.5; d[i + 3] = 255;
+        data[i] = col[0] * 255 + 0.5; data[i + 1] = col[1] * 255 + 0.5; data[i + 2] = col[2] * 255 + 0.5; data[i + 3] = 255;
       }
-      tctx.putImageData(img, 0, 0);
-      el.style.backgroundImage = `url("${tmp.toDataURL()}")`;
       el.style.width = W + 'px'; el.style.height = H + 'px';
+      if (space === 'srgb') {
+        tctx.putImageData(new ImageData(data, w, h), 0, 0);
+        el.style.backgroundImage = `url("${tmp.toDataURL()}")`;
+      } else {
+        // Display P3 numbers: keep them in a P3 canvas inside the layer, so nothing converts them
+        let cv = el.firstChild;
+        if (!cv) { cv = document.createElement('canvas'); cv.style.cssText = 'display:block;width:100%;height:100%'; el.appendChild(cv); }
+        cv.width = w; cv.height = h;
+        cv.getContext('2d', { colorSpace: space }).putImageData(new ImageData(data, w, h, { colorSpace: space }), 0, 0);
+      }
     });
     lum.style.width = W + 'px'; lum.style.height = H + 'px';
     for (const pr of ['maskImage', 'webkitMaskImage']) lum.style[pr] = `url("${glyphs.maskUrl}")`;
@@ -414,7 +428,8 @@ function textShape(cursor, { mkLayer, move }) {
 // Image: a real difference with the picture, then the palette on top.
 // The palette layers use black and white swapped, so a white picture behaves exactly like
 // the circle and a black one leaves the page as it is.
-function imageShape(cursor, { mkLayer, move }) {
+function imageShape(cursor, { mkLayer, move, space }) {
+  const rgb = (c) => cssColor(c, space);
   const pic = mkLayer('difference');
   pic.style.backgroundImage = `url("${cursor.image}")`;
   pic.style.backgroundSize = '100% 100%';
@@ -434,8 +449,9 @@ function imageShape(cursor, { mkLayer, move }) {
     static: true,
     paint(next, duotone) {
       lum.style.display = duotone ? '' : 'none';
-      // G(y) = F(1 − y): intercept a + d, slope −d
-      fb = { a: next.a.map((v, i) => v + next.d[i]), d: next.d.map((v) => -v) };
+      // out = F(|page − picture|): over white the picture shows as it is (with the classic
+      // palette), over black it inverts, and every other color sits in between per channel
+      fb = next;
       const p = plan(fb);
       const els = set.ensure(p.blends);
       p.at(1).forEach((col, L) => { els[L].style.backgroundColor = rgb(col); });
@@ -463,6 +479,7 @@ function isWebKit() {
 
 function createMedia(opt, pal, areaPalette) {
   const selector = opt.media === true ? 'img, video' : opt.media || null;
+  const space = opt.space;
   const items = new Map();   // element → item
   const visible = new Set();
   let active = 0;
@@ -517,6 +534,16 @@ function createMedia(opt, pal, areaPalette) {
         return;
       }
       recolor(data.data, it.palette);
+      if (space !== 'srgb') {
+        // the pre-corrected pixels are Display P3 numbers: hand them over in a P3 canvas
+        const pc = document.createElement('canvas');
+        pc.width = w; pc.height = h;
+        const pctx = pc.getContext('2d', { colorSpace: space });
+        pctx.putImageData(new ImageData(data.data, w, h, { colorSpace: space }), 0, 0);
+        mount(it, pc);
+        it.state = 'ready';
+        return;
+      }
       ctx.putImageData(data, 0, 0);
       c.toBlob((blob) => {
         if (!blob || !items.has(el)) return;
@@ -548,7 +575,7 @@ function createMedia(opt, pal, areaPalette) {
     // a 33³ cache would be faster for huge images; trilinear is already cheap
     for (let i = 0; i < px.length; i += 4) {
       c[0] = px[i] / 255; c[1] = px[i + 1] / 255; c[2] = px[i + 2] / 255;
-      precorrect(p.fallback, lookup(p.nodes, c), out);
+      precorrect(p.fallback, p.toSpace(lookup(p.nodes, c)), out);
       px[i] = out[0] * 255 + 0.5; px[i + 1] = out[1] * 255 + 0.5; px[i + 2] = out[2] * 255 + 0.5;
     }
   }
@@ -635,16 +662,24 @@ function createMedia(opt, pal, areaPalette) {
     const gl = c.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: false });
     if (!gl) { it.state = 'skip'; return; }
     const p = it.palette;
-    const n = p.nodes, A = p.fallback.A, B = p.fallback.B;
-    const v3 = (a) => `vec3(${a.map((x) => x.toFixed(6)).join(',')})`;
-    const fs = `precision mediump float;varying vec2 uv;uniform sampler2D t;
+    const n = p.nodes, a = p.fallback.a, d = p.fallback.d;
+    const v3 = (x) => `vec3(${x.map((y) => y.toFixed(6)).join(',')})`;
+    const p3 = space !== 'srgb';
+    // sRGB → Display P3 in the shader, when the browser blends in P3
+    const toP3 = p3 ? `
+      vec3 dec(vec3 v){return mix(v/12.92,pow((v+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),v));}
+      vec3 enc(vec3 v){return mix(v*12.92,1.055*pow(max(v,vec3(0.0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),v));}
+      vec3 sp(vec3 c){vec3 l=dec(c);return enc(vec3(dot(vec3(0.8224621,0.177538,0.0),l),dot(vec3(0.0331941,0.9668058,0.0),l),dot(vec3(0.0170827,0.0723974,0.9105199),l)));}`
+      : 'vec3 sp(vec3 c){return c;}';
+    const fs = `precision highp float;varying vec2 uv;uniform sampler2D t;${toP3}
       void main(){vec4 s=texture2D(t,uv);vec3 c=s.rgb;
       vec3 x0=mix(${v3(n.black)},${v3(n.red)},c.r),x1=mix(${v3(n.green)},${v3(n.yellow)},c.r),
            x2=mix(${v3(n.blue)},${v3(n.magenta)},c.r),x3=mix(${v3(n.cyan)},${v3(n.white)},c.r);
-      vec3 m=mix(mix(x0,x1,c.g),mix(x2,x3,c.g),c.b);
-      vec3 A=${v3(A)},D=${v3(B)}-A;
+      vec3 m=sp(mix(mix(x0,x1,c.g),mix(x2,x3,c.g),c.b));
+      vec3 A=${v3(a)},D=${v3(d)};
       vec3 o=clamp((m-A)/mix(D,vec3(1.0),step(abs(D),vec3(1e-6))),0.0,1.0);
       gl_FragColor=vec4(o,s.a);}`;
+    if (p3 && 'drawingBufferColorSpace' in gl) gl.drawingBufferColorSpace = space;
     const vs = 'attribute vec2 p;varying vec2 uv;void main(){uv=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0,1);}';
     const prog = gl.createProgram();
     for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {

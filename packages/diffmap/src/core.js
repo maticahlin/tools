@@ -80,6 +80,45 @@ export function toHex(rgb) {
 
 export function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
+// ---------------------------------------------------------------- compositing color space
+//
+// Blend modes run on the numbers of whatever color space the browser composites in, and
+// that differs by platform: Windows and most Linux setups composite in sRGB, while browsers
+// on macOS with a wide-gamut screen composite in Display P3. Same CSS, different math —
+// the reason a difference cursor can look right on Windows and pink on a Mac.
+// diffmap does its math in the space the browser actually blends in, so the colors that
+// matter land exactly on both. Display P3 shares sRGB's transfer curve, only the primaries differ.
+
+const decode = (v) => (Math.abs(v) <= 0.04045 ? v / 12.92 : Math.sign(v) * ((Math.abs(v) + 0.055) / 1.055) ** 2.4);
+const encode = (v) => (Math.abs(v) <= 0.0031308 ? v * 12.92 : Math.sign(v) * (1.055 * Math.abs(v) ** (1 / 2.4) - 0.055));
+const mul = (m, c) => m.map((row) => row[0] * c[0] + row[1] * c[1] + row[2] * c[2]);
+const SRGB_TO_P3 = [[0.8224621, 0.177538, 0], [0.0331941, 0.9668058, 0], [0.0170827, 0.0723974, 0.9105199]];
+const P3_TO_SRGB = invert3(SRGB_TO_P3);
+function invert3(m) {
+  const [[a, b, c], [d, e, f], [g, h, i]] = m;
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  return [[A, -(b * i - c * h), b * f - c * e], [B, a * i - c * g, -(a * f - c * d)], [C, -(a * h - b * g), a * e - b * d]].map((r) => r.map((v) => v / det));
+}
+
+/** sRGB → Display P3 (both gamma-encoded, 0..1). */
+export const srgbToP3 = (c) => mul(SRGB_TO_P3, c.map(decode)).map(encode);
+/** Display P3 → sRGB; may leave 0..1 for colors outside sRGB. */
+export const p3ToSrgb = (c) => mul(P3_TO_SRGB, c.map(decode)).map(encode);
+
+/** Converters between sRGB (how you write colors) and the space blending happens in. */
+export function spaceOf(space = 'srgb') {
+  return space === 'display-p3'
+    ? { name: 'display-p3', to: srgbToP3, from: p3ToSrgb }
+    : { name: 'srgb', to: (c) => c, from: (c) => c };
+}
+
+/** A CSS color for a value in blending space. */
+export function cssColor(c, space = 'srgb') {
+  if (space === 'display-p3') return `color(display-p3 ${c.map((v) => v.toFixed(5)).join(' ')})`;
+  return `rgb(${c.map((v) => (v * 255).toFixed(2)).join(', ')})`;
+}
+
 // ---------------------------------------------------------------- node map (engine 2)
 
 /** Normalize a node map: missing corners fall back to the inverted default. */
@@ -146,11 +185,12 @@ export function makeFallback(a, d, extra = {}) {
  * so two anchors land exactly whenever their inputs differ in a channel.
  * An anchor is a color (its target is the node map's output for it) or {from, to}.
  */
-export function fitFallback(nodes, anchors = [], { cornerWeight = 1 } = {}) {
+export function fitFallback(nodes, anchors = [], { cornerWeight = 1, space = 'srgb' } = {}) {
+  const { to } = spaceOf(space); // everything is fitted in the space the browser blends in
   const pairs = anchors.map((x) => (x && !Array.isArray(x) && x.from !== undefined
-    ? { x: parseColor(x.from), y: parseColor(x.to) }
-    : { x: parseColor(x), y: lookup(nodes, parseColor(x)) }));
-  const samples = CORNERS.map((k) => ({ x: CORNER_RGB[k], y: nodes[k], w: cornerWeight }));
+    ? { x: to(parseColor(x.from)), y: to(parseColor(x.to)) }
+    : { x: to(parseColor(x)), y: to(lookup(nodes, parseColor(x))) }));
+  const samples = CORNERS.map((k) => ({ x: to(CORNER_RGB[k]), y: to(nodes[k]), w: cornerWeight }));
   for (const p of pairs) samples.push({ ...p, w: 1e6 });
 
   const a = [0, 0, 0], d = [0, 0, 0];
@@ -318,7 +358,7 @@ export function activeLayers(fb, kind = kindOf(fb)) {
  * The CSS blend layers at full strength, bottom → top, with no-op layers dropped.
  * @returns {Array<{blend:string, color:string}>}
  */
-export function layers(fb, { duotone = false } = {}) {
+export function layers(fb, { duotone = false, space = 'srgb' } = {}) {
   const kind = kindOf(fb);
   const blends = kind === 'affine' ? AFFINE : CLAMPED;
   const cols = layersAt(fb, 1, kind);
@@ -326,7 +366,7 @@ export function layers(fb, { duotone = false } = {}) {
   // `color` with a neutral gray keeps only the backdrop's luminance
   if (duotone) out.push({ blend: 'color', color: '#808080' });
   cols.forEach((c, L) => {
-    if (c.some((v) => Math.abs(v - NEUTRAL[blends[L]]) > 0.5 / 255)) out.push({ blend: blends[L], color: toHex(c) });
+    if (c.some((v) => Math.abs(v - NEUTRAL[blends[L]]) > 0.5 / 255)) out.push({ blend: blends[L], color: space === 'srgb' ? toHex(c) : cssColor(c, space) });
   });
   return out;
 }
@@ -335,28 +375,36 @@ export function layers(fb, { duotone = false } = {}) {
  * Everything the runtime needs from a user config, resolved once.
  * @param {DiffmapPalette} palette
  */
-export function resolvePalette(palette = {}) {
+export function resolvePalette(palette = {}, { space = 'srgb' } = {}) {
+  const sp = spaceOf(space);
   let nodes = normalizeNodes(palette.nodes);
   let fb, media = true;
+  const fromStops = (dark, light) => {
+    const A = sp.to(parseColor(dark)), B = sp.to(parseColor(light));
+    return makeFallback(A, B.map((v, i) => v - A[i]), { exact: [], error: NaN });
+  };
   if (palette.mode === 'duotone') {
     const [dark = '#000000', light = '#ffffff'] = palette.stops ?? [];
-    const A = parseColor(dark), B = parseColor(light);
-    fb = makeFallback(A, B.map((v, i) => v - A[i]), { exact: [], error: NaN });
+    fb = fromStops(dark, light);
     media = false;
   } else if (palette.mode === 'swap') {
     // two colors trade places exactly; everything else follows the same per-channel line
     const [c1 = '#000000', c2 = '#ffffff'] = palette.colors ?? [];
-    fb = fitFallback(nodes, [{ from: c1, to: c2 }, { from: c2, to: c1 }], { cornerWeight: 0 });
-    nodes = Object.fromEntries(CORNERS.map((k) => [k, applyFallback(fb, CORNER_RGB[k])]));
+    fb = fitFallback(nodes, [{ from: c1, to: c2 }, { from: c2, to: c1 }], { cornerWeight: 0, space });
+    nodes = Object.fromEntries(CORNERS.map((k) => [k, sp.from(applyFallback(fb, sp.to(CORNER_RGB[k]))).map(clamp01)]));
     media = false; // images get the same map from the layers alone
   } else if (palette.fallback) {
-    const A = parseColor(palette.fallback.black), B = parseColor(palette.fallback.white);
-    fb = makeFallback(A, B.map((v, i) => v - A[i]), { exact: [], error: NaN });
+    fb = fromStops(palette.fallback.black, palette.fallback.white);
   } else {
-    fb = fitFallback(nodes, palette.anchors ?? []);
+    fb = fitFallback(nodes, palette.anchors ?? [], { space });
   }
   const duotone = palette.mode === 'duotone';
-  return { nodes, fallback: fb, duotone, media, kind: kindOf(fb), layers: layers(fb, { duotone }) };
+  return {
+    nodes, fallback: fb, duotone, media, space: sp.name, kind: kindOf(fb), layers: layers(fb, { duotone, space: sp.name }),
+    /** what a page color (sRGB) turns into under the blend layers, back in sRGB */
+    page: (c) => sp.from(applyFallback(fb, sp.to(c))).map(clamp01),
+    toSpace: sp.to, fromSpace: sp.from,
+  };
 }
 
 /**
@@ -369,3 +417,14 @@ export function resolvePalette(palette = {}) {
  * @property {[string, string]} [stops]  duotone: [what dark becomes, what light becomes]
  * @property {{black:string, white:string}} [fallback]  override the fitted fallback
  */
+
+/** Which space this browser most likely blends in. See README "Same on every platform". */
+export function detectSpace(env = globalThis) {
+  try {
+    const nav = env.navigator ?? {};
+    const mac = /Mac/i.test(nav.userAgentData?.platform ?? nav.platform ?? nav.userAgent ?? '');
+    const wide = env.matchMedia?.('(color-gamut: p3)').matches;
+    const firefox = /Firefox\//.test(nav.userAgent ?? '');
+    return mac && wide && !firefox ? 'display-p3' : 'srgb';
+  } catch { return 'srgb'; }
+}

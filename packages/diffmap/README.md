@@ -32,6 +32,18 @@ Measured in Chromium and WebKit (`node test/pilot.mjs`):
 
 Swap uses `lighten` and `darken` layers so each channel can clip at 0 and 1, which is exactly what this needs.
 
+## Same on every platform
+
+Blend modes are computed in whatever color space the browser composites in, and that isn't the same everywhere. Browsers on Windows composite in sRGB; browsers on macOS composite in Display P3 when the screen supports it. The spec leaves this to the browser. The same `mix-blend-mode` CSS therefore gives different colors on a Mac and on a PC — which is why a difference label can look right on one and pink on the other.
+
+diffmap does all of its math in the space the browser actually blends in, and writes the layer colors in that space (`color(display-p3 …)` on P3), so the colors you pin (swap colors, anchors) come out the same on both:
+
+- `colorSpace: "auto"` (default) picks Display P3 for Safari and Chromium on a wide-gamut Mac, sRGB everywhere else.
+- `colorSpace: "srgb"` or `"display-p3"` forces one.
+- The setup page has a **platform check**: two rows of squares, one per space. On your machine, the row whose squares match is the space your browser blends in. If auto picks the other one, set `colorSpace` and tell us your browser and OS.
+
+Status: verified in Chromium and WebKit with sRGB compositing; the Display P3 path is implemented and unit-tested against simulated P3 compositing, and needs the platform check on a real Mac.
+
 ## Quick start
 
 ```sh
@@ -90,6 +102,7 @@ image pixels ─► node map ─► pre-correct ─► blend layers ────
   "media": "img[data-diffmap], video[data-diffmap]",  // or true for all images and video
   "hideCursor": false,
   "position": "auto",                   // "fixed" | "absolute" | "auto"
+  "colorSpace": "auto",                 // "auto" | "srgb" | "display-p3": the space this browser blends in
   "edge": 1.25,                         // circle: px over which the effect fades out; larger = feathered
   "cursor": null                        // circle by default, or one of:
   // { "text": "hello", "font": "700 120px Arial" }    the word is the cursor
@@ -101,7 +114,7 @@ image pixels ─► node map ─► pre-correct ─► blend layers ────
 
 - **Circle** (default). Grows over links and buttons.
 - **Text.** The word itself is the cursor; the inside of every glyph gets the effect, with clean anti-aliased edges.
-- **Image.** A real difference between the picture and the page, `|page − picture|`, then colored by your palette with black and white swapped. A white picture behaves exactly like the circle; black parts leave the page alone. Images marked `data-diffmap` get the blend layers here, not the node map, since the result depends on the moving picture.
+- **Image.** The picture reacts to what's under it: over white it shows as it is, over black it turns into its negative, and every other color lands in between, per channel (`F(|page − picture|)`, colored by your palette). Images marked `data-diffmap` get the blend layers here, not the node map, since the result depends on the moving picture.
 
 | Attribute | Effect |
 | --- | --- |

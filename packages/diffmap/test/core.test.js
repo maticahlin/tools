@@ -208,3 +208,30 @@ test('soft edge gradients: interpolating between the stops never leaves [page, f
     }
   }
 });
+
+import { srgbToP3, p3ToSrgb } from '../src/core.js';
+
+// A browser that composites in `space`: page colors are converted in, blended there, shown.
+const blendIn = (space, stack, srgb) => {
+  const to = space === 'display-p3' ? srgbToP3 : (c) => c, from = space === 'display-p3' ? p3ToSrgb : (c) => c;
+  const kind = kindOf(stack.fb), blends = kind === 'affine' ? AFFINE : CLAMPED;
+  const out = layersAt(stack.fb, 1, kind).reduce((b, col, L) => BLEND[blends[L]](b, col), to(srgb));
+  return from(out).map((v) => Math.min(1, Math.max(0, v)));
+};
+const lv = (x, y) => Math.max(...x.map((v, i) => Math.abs(v - y[i]))) * 255;
+
+test('color spaces: sRGB ↔ Display P3 round-trips', () => {
+  for (let k = 0; k < 200; k++) { const c = rcolor(); p3ToSrgb(srgbToP3(c)).forEach((v, i) => assert.ok(Math.abs(v - c[i]) < 1e-6)); }
+});
+
+test('same on every platform: swap math done in the blending space is exact in both', () => {
+  const red = parseColor('#ff1408'), white = [1, 1, 1];
+  for (const space of ['srgb', 'display-p3']) {
+    const r = resolvePalette({ mode: 'swap', colors: ['#ff1408', '#ffffff'] }, { space });
+    assert.ok(lv(blendIn(space, { fb: r.fallback }, red), white) < 0.5, `${space}: red → white`);
+    assert.ok(lv(blendIn(space, { fb: r.fallback }, white), red) < 0.5, `${space}: white → red`);
+  }
+  // and the wrong assumption is visibly off, which is the macOS/Windows bug
+  const srgbMath = resolvePalette({ mode: 'swap', colors: ['#ff1408', '#ffffff'] }, { space: 'srgb' });
+  assert.ok(lv(blendIn('display-p3', { fb: srgbMath.fallback }, red), white) > 10);
+});

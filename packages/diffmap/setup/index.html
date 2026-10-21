@@ -14,7 +14,8 @@
     color-scheme: dark;
   }
 
-  * { box-sizing: border-box; border-radius: 0 !important; }
+  * { box-sizing: border-box; }
+  *:not([data-diffmap-layer]) { border-radius: 0 !important; }
   [hidden] { display: none !important; }
   html, body { background: var(--bg); }
   body {
@@ -104,6 +105,12 @@
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .pair label { display: grid; gap: 4px; }
 
+  .calib { display: grid; gap: 6px; }
+  .calib .crow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+  .calib .pairs { display: flex; gap: 6px; }
+  .calib .pair2 { display: flex; border: 1px solid var(--rule); }
+  .calib .sq { width: 34px; height: 34px; position: relative; }
+  .calib .sq i { position: absolute; inset: 0; }
   .status { display: grid; gap: 8px; }
   .status p { display: grid; grid-template-columns: 16px 1fr; gap: 4px; }
   .status p::before { content: "✓"; font-weight: 700; }
@@ -184,6 +191,17 @@
         <div class="row"><button type="button" class="btn" id="brandPreset">Example: brand red and white, with hover labels</button></div>
       </section>
 
+      <section class="box" id="platformBox">
+        <h4>Same on every platform <span id="spaceNow"></span></h4>
+        <p class="hint">Browsers blend colors in sRGB on Windows and in Display P3 on most Macs, so the same CSS can look different. diffmap does its math in your browser's space. Check it here: in the matching row, both pairs of squares look identical.</p>
+        <div class="calib" id="calib"></div>
+        <div class="seg" role="group" aria-label="Blending space">
+          <button type="button" id="spAuto" aria-pressed="true">Auto</button>
+          <button type="button" id="spSrgb" aria-pressed="false">sRGB</button>
+          <button type="button" id="spP3" aria-pressed="false">Display P3</button>
+        </div>
+      </section>
+
       <section class="box" id="nodesBox">
         <h4>Nodes <span>what each color turns into</span></h4>
         <div class="row" id="presets"></div>
@@ -251,7 +269,7 @@
           <label class="slider">Font size<output id="fontOut"></output><input type="range" id="fontSize" min="12" max="260" step="1"></label>
         </div>
         <div id="imageOpts" class="box" style="border:0;padding:0" hidden>
-          <p class="hint">The picture is differenced with whatever is under it, then colored by your black and white nodes. A white picture acts like the circle; black leaves the page alone.</p>
+          <p class="hint">Over white the picture shows as it is, over black it turns into its negative, and every other color lands in between. Your palette colors the result.</p>
           <div class="row">
             <label class="btn" for="ownCursor">Use your own image</label>
             <input type="file" id="ownCursor" accept="image/*" class="visually-hidden">
@@ -283,7 +301,7 @@
 <script type="module">
   import {
     diffmap, resolvePalette, lookup, applyFallback, coverage, CORNER_RGB, invertNodes,
-    toHex, parseColor, PRESETS, fitToRange,
+    toHex, parseColor, PRESETS, fitToRange, detectSpace,
   } from './src/index.js';
 
   const $ = (id) => document.getElementById(id);
@@ -291,7 +309,7 @@
   const PAINTING = 'temeraire.jpg';
   const DEFAULT = {
     mode: 'difference', nodes: { ...PRESETS.classic }, anchors: ['#111111', '#ffffff'], stops: ['#1a1aff', '#ff5a36'], swap: ['#ff1408', '#ffffff'],
-    shape: 'circle', size: 40, grow: 110, edge: 1.25, word: 'diffmap', fontSize: 120, imgW: 260, ease: 0.2,
+    colorSpace: 'auto', shape: 'circle', size: 40, grow: 110, edge: 1.25, word: 'diffmap', fontSize: 120, imgW: 260, ease: 0.2,
   };
   const STORE = 'diffmap-playground-v2';
   let state = { ...structuredClone(DEFAULT), ...(load() ?? {}) };
@@ -317,6 +335,7 @@
     if (cur) c.cursor = cur;
     else Object.assign(c, { size: state.size, grow: { size: state.grow }, edge: state.edge });
     c.ease = state.ease;
+    if (state.colorSpace !== 'auto') c.colorSpace = state.colorSpace;
     return c;
   }
 
@@ -385,6 +404,22 @@
   for (const [id, shape] of [['shapeCircle', 'circle'], ['shapeText', 'text'], ['shapeImage', 'image']]) {
     $(id).addEventListener('click', () => { state.shape = shape; render(); restart(); });
   }
+  for (const [id, sp] of [['spAuto', 'auto'], ['spSrgb', 'srgb'], ['spP3', 'display-p3']]) {
+    $(id).addEventListener('click', () => { state.colorSpace = sp; render(); restart(); });
+  }
+  // calibration: a red square that the swap layers should turn into true white, and a white one
+  // that should turn into the brand red, each next to a plain reference square
+  function renderCalib() {
+    const rows = [['srgb', 'sRGB math'], ['display-p3', 'Display P3 math']];
+    const stack = (bg, space) => {
+      const r = resolvePalette({ mode: 'swap', colors: ['#ff1408', '#ffffff'] }, { space });
+      return `<span class="sq" style="background:${bg}">${r.layers.map((l) => `<i style="background:${l.color};mix-blend-mode:${l.blend}"></i>`).join('')}</span>`;
+    };
+    $('calib').innerHTML = rows.map(([sp, label]) => `<div class="crow"><span>${label}${sp === detectSpace() ? ' <em>(auto picks this)</em>' : ''}</span>
+      <span class="pairs"><span class="pair2">${stack('#ff1408', sp)}<span class="sq" style="background:#fff"></span></span>
+      <span class="pair2">${stack('#ffffff', sp)}<span class="sq" style="background:#ff1408"></span></span></span></div>`).join('');
+  }
+  renderCalib();
   $('fitRange').addEventListener('click', () => { state.nodes = fitToRange(state.nodes); render(); applyPalette(); });
 
   // page-color strip and its image twin
@@ -422,6 +457,9 @@
     $('imageOpts').hidden = state.shape !== 'image';
     $('stageMode').textContent = { circle: 'Circle cursor', text: 'Text cursor', image: 'Image cursor' }[state.shape];
     $('credit').hidden = cursorImage.own;
+    for (const [id, sp] of [['spAuto', 'auto'], ['spSrgb', 'srgb'], ['spP3', 'display-p3']]) $(id).setAttribute('aria-pressed', String(state.colorSpace === sp));
+    const used = state.colorSpace === 'auto' ? detectSpace() : state.colorSpace;
+    $('spaceNow').textContent = `using ${used === 'srgb' ? 'sRGB' : 'Display P3'}`;
     persist(); renderStatus(); renderMaps(); renderConfig();
   }
 
@@ -563,6 +601,7 @@
     if (c.grow?.size) state.grow = c.grow.size;
     if (c.edge) state.edge = c.edge;
     if (c.ease) state.ease = c.ease;
+    state.colorSpace = c.colorSpace ?? 'auto';
     if (c.cursor?.text) { state.shape = 'text'; state.word = c.cursor.text; state.fontSize = Number(c.cursor.font?.match(/(\d+)px/)?.[1] ?? state.fontSize); }
     else if (c.cursor?.image) { state.shape = 'image'; state.imgW = c.cursor.width ?? state.imgW; }
     else state.shape = 'circle';

@@ -117,8 +117,8 @@ function compareText(before, after, box, rects, pal) {
 function compareImage(before, after, box, paint, pal) {
   const errs = [];
   const [l, t] = box.map(Math.round);
-  // G(y) = F(1 − y): black and white swapped, applied to |page − picture|
-  const G = { a: pal.fallback.a.map((v, i) => v + pal.fallback.d[i]), d: pal.fallback.d.map((v) => -v) };
+  // out = F(|page − picture|): with the classic palette, white page = picture as is, black = inverted
+  const G = pal.fallback;
   for (let y = 0; y < paint.height; y++) for (let x = 0; x < paint.width; x++) {
     const X = l + x, Y = t + y;
     if (X < 0 || Y < 0 || X >= after.width || Y >= after.height) continue;

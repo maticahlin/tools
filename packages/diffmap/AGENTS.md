@@ -54,6 +54,8 @@ Typical asks: "add the diffmap cursor", "set up diffmap", "difference cursor in 
 
 ## Things to check after installing
 
+- Leave `colorSpace` on `auto` unless the user reports that the setup page's platform check shows the other row matching on their machine.
+
 - The page (`html` or `body`) must have a background color. diffmap sets white if neither has one and logs a note.
 - Don't put the effect inside an element with `isolation: isolate`, `opacity < 1`, `filter` or `mix-blend-mode` and expect it to see outside it; diffmap adds its layers at the document level, so this only matters if a user moves them.
 - Touch-only devices get nothing (no hover). That is intended.

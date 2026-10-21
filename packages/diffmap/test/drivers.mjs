@@ -45,7 +45,7 @@ async function playwrightDriver(name) {
       executablePath = await (await import('@sparticuz/chromium')).default.executablePath();
     }
   }
-  const browser = await pw[name].launch({ executablePath, args: name === 'chromium' ? ['--force-color-profile=srgb', '--disable-lcd-text'] : [] });
+  const browser = await pw[name].launch({ executablePath, args: name === 'chromium' ? [`--force-color-profile=${process.env.PROFILE || 'srgb'}`, '--disable-lcd-text'] : [] });
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 1 });
   return {
     version: browser.version(),
