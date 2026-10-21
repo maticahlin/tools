@@ -1,0 +1,23 @@
+{
+  "name": "@maticahlin/diffmap",
+  "version": "0.1.0",
+  "description": "A difference-blend cursor whose colors you control. Text, images and video, every major browser.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Matic Ahlin (https://tools.maticahlin.com)",
+  "homepage": "https://tools.maticahlin.com/diffmap",
+  "keywords": ["cursor", "mix-blend-mode", "difference", "gradient map", "duotone", "hover effect"],
+  "exports": {
+    ".": "./src/index.js",
+    "./core": "./src/core.js"
+  },
+  "main": "./src/index.js",
+  "bin": { "diffmap": "./bin/diffmap.js" },
+  "files": ["src", "bin", "setup/index.html", "setup/dusk.jpg", "agents", "AGENTS.md", "README.md"],
+  "sideEffects": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:pixel": "node test/pixel.mjs chromium webkit firefox"
+  }
+}

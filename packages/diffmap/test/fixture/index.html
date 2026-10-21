@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #fff; }
+  body { font: 700 64px/1 Arial, Helvetica, sans-serif; color: #000; width: 1200px; padding-bottom: 800px; }
+  .row { display: flex; gap: 0; }
+  .sw { width: 75px; height: 120px; }
+  h1 { margin: 0; padding: 20px 30px; font-size: 96px; letter-spacing: -2px; }
+  figure { position: relative; margin: 0 0 0 30px; width: 640px; height: 420px; }
+  figure img { display: block; width: 640px; height: 420px; }
+  figcaption { position: absolute; left: 30px; bottom: 30px; color: #fff; font-size: 56px; }
+  .dark { background: #111; color: #fafafa; padding: 20px 30px; position: absolute; left: 700px; top: 300px; width: 440px; height: 300px; }
+</style>
+</head>
+<body>
+  <h1 id="title">Difference, mapped</h1>
+  <div class="row" id="swatches"></div>
+  <figure id="fig"><img id="img" src="photo.png" data-diffmap alt=""><figcaption id="cap">Text over image</figcaption></figure>
+  <div class="dark" id="dark">Light text on dark</div>
+<script>
+  // corners + a few in-betweens
+  const cols = ['#000000','#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff','#ffffff',
+    '#7f7f7f','#3a6ea5','#d9a441','#9c2f4a','#4fa36d','#202a44','#f2e8cf','#a0a0a0'];
+  for (const c of cols) { const d = document.createElement('div'); d.className = 'sw'; d.style.background = c; swatches.append(d); }
+</script>
+<script type="module">
+  import { diffmap } from '/src/index.js';
+  const q = new URLSearchParams(location.search);
+  if (q.get('video')) {
+    // same box, but a paused <video> instead of the <img>
+    const v = document.createElement('video');
+    v.id = 'img'; v.muted = true; v.playsInline = true; v.preload = 'auto'; v.dataset.diffmap = '';
+    v.style.cssText = 'display:block;width:640px;height:420px;object-fit:fill';
+    v.innerHTML = '<source src="clip.webm" type="video/webm"><source src="clip.mp4" type="video/mp4">';
+    document.getElementById('img').replaceWith(v);
+    await new Promise((r) => { v.addEventListener('seeked', r, { once: true }); v.addEventListener('loadeddata', () => { v.currentTime = 1; }, { once: true }); });
+  }
+  const palette = JSON.parse(q.get('p') || '{}');
+  window.__dm = diffmap({ palette, force: true, ease: 1, size: Number(q.get('size') || 260), grow: false, transition: 0, position: q.get('pos') || 'auto' });
+  // synthetic pointer events, same in every driver
+  window.__move = (x, y) => {
+    const t = document.elementFromPoint(x, y) || document.body;
+    t.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true }));
+  };
+  window.__rects = () => Object.fromEntries(['img', 'cap', 'title', 'dark', 'swatches'].map((id) => {
+    const r = document.getElementById(id).getBoundingClientRect(); return [id, [r.left, r.top, r.right, r.bottom]];
+  }));
+  window.__overlayReady = () => window.__dm.inspect().media.every((m) => m.state === 'ready');
+</script>
+</body>
+</html>

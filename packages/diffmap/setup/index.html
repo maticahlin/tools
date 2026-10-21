@@ -1,0 +1,477 @@
+<title>diffmap Playground</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;900&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a sample website on the left (the cursor's test bench), a sticky control rail on the right. */
+  :root {
+    --paper: #f3f4f7;      /* page ground, cool grey */
+    --panel: #ffffff;
+    --ink: #13151a;
+    --muted: #5b6270;
+    --line: #dadee6;
+    --accent: #3a35e6;     /* ultramarine: controls and focus */
+    --ok: #137a4b;
+    --warn: #a35a00;
+    --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --body: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #101217; --panel: #171a21; --ink: #eceef3; --muted: #9aa1ae; --line: #2a2f3a;
+      --accent: #8f8bff; --ok: #4fd19a; --warn: #f2b14a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #101217; --panel: #171a21; --ink: #eceef3; --muted: #9aa1ae; --line: #2a2f3a;
+    --accent: #8f8bff; --ok: #4fd19a; --warn: #f2b14a; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--paper); }
+  body {
+    color: var(--ink); font: 400 15px/1.5 var(--body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 20px 40px;
+  }
+  .wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 20px; }
+
+  /* ---------- header */
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+  .brand { font: 900 30px/1 var(--display); letter-spacing: -0.03em; margin: 0; }
+  .brand b { font-weight: 900; color: var(--accent); }
+  .lede { color: var(--muted); margin: 0; max-width: 62ch; }
+  .where { margin-left: auto; font: 400 11px/1.4 var(--mono); color: var(--muted); letter-spacing: 0.02em; }
+  .where[data-live="true"] { color: var(--ok); }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- stage: a stand-in website with fixed colors, independent of the theme */
+  .stage {
+    background: #ffffff; color: #111111; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    min-width: 0;
+  }
+  .stage-bar {
+    display: flex; gap: 6px; align-items: center; padding: 9px 12px; background: #eceef2; border-bottom: 1px solid #d9dce2;
+    font: 400 11px/1 var(--mono); color: #6a707c;
+  }
+  .stage-bar i { width: 9px; height: 9px; border-radius: 50%; background: #c9cdd5; display: inline-block; }
+  .stage-bar span { margin-left: 8px; }
+  .site { padding: 26px clamp(18px, 4vw, 44px) 0; display: grid; gap: 22px; }
+  .site nav { display: flex; flex-wrap: wrap; gap: 6px 22px; font-weight: 500; }
+  .site nav a { color: inherit; text-decoration: none; }
+  .site nav a:first-child { font-weight: 900; margin-right: auto; letter-spacing: -0.02em; }
+  .site h2 { margin: 6px 0 0; font: 900 clamp(40px, 7.4vw, 92px)/0.92 var(--display); letter-spacing: -0.045em; text-wrap: balance; }
+  .site p { margin: 0; max-width: 46ch; font-size: 17px; color: #333; }
+  .cta { display: inline-flex; width: fit-content; padding: 12px 20px; border-radius: 999px; background: #111; color: #fff; font-weight: 700; text-decoration: none; }
+  figure { margin: 0 calc(-1 * clamp(18px, 4vw, 44px)); position: relative; }
+  figure img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; max-width: 100%; }
+  figcaption {
+    position: absolute; left: clamp(18px, 4vw, 44px); bottom: 22px; right: 18px;
+    color: #fff; font: 900 clamp(26px, 4.4vw, 52px)/0.95 var(--display); letter-spacing: -0.03em; pointer-events: none;
+  }
+  .drop-hint { position: absolute; right: 14px; top: 14px; font: 500 11px/1 var(--mono); color: #fff; background: rgba(0,0,0,.45); padding: 7px 9px; border-radius: 6px; }
+  figure.dragging { outline: 3px dashed #3a35e6; outline-offset: -8px; }
+  .strip { display: grid; grid-template-columns: repeat(8, 1fr); margin: 0 calc(-1 * clamp(18px, 4vw, 44px)); }
+  .strip div { aspect-ratio: 1 / 1.2; display: flex; align-items: end; padding: 8px; font: 500 10px/1 var(--mono); }
+  .dark { margin: 0 calc(-1 * clamp(18px, 4vw, 44px)); background: #111; color: #f5f5f5; padding: 34px clamp(18px, 4vw, 44px) 40px; display: grid; gap: 14px; }
+  .dark h3 { margin: 0; font: 900 clamp(28px, 4vw, 44px)/1 var(--display); letter-spacing: -0.03em; }
+  .dark p { color: #bdbdbd; }
+  .dark .cta { background: #f5f5f5; color: #111; }
+
+  /* ---------- control rail */
+  .rail {
+    position: sticky; top: max(12px, env(safe-area-inset-top, 0px)); display: grid; gap: 0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-width: 0;
+    max-height: calc(100dvh - 24px); overflow: auto;
+  }
+  @media (max-width: 980px) { .rail { position: static; max-height: none; } }
+  section.ctl { padding: 16px 18px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+  section.ctl:first-child { border-top: 0; }
+  .ctl h4 { margin: 0; font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+  .hint { margin: 0; color: var(--muted); font-size: 13px; }
+
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 3px; }
+  .seg button { font: 700 14px/1 var(--body); padding: 9px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip-btn { font: 500 12px/1 var(--body); padding: 7px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .chip-btn:hover { border-color: var(--ink); }
+  .chip-btn .dots { display: inline-flex; }
+  .chip-btn .dots i { width: 9px; height: 9px; border-radius: 50%; margin-left: -3px; border: 1px solid var(--panel); }
+
+  .nodes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .node { display: grid; grid-template-columns: 22px 12px 1fr; align-items: center; gap: 4px; min-width: 0; }
+  .node .in { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--line); }
+  .node .arrow { color: var(--muted); font-size: 11px; text-align: center; }
+  .pick { display: flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; min-width: 0; }
+  .pick input[type="color"] { width: 30px; height: 28px; border: 0; padding: 0; background: none; cursor: pointer; flex: none; }
+  .pick input[type="text"] { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 400 12px/1 var(--mono); padding: 0 6px; height: 28px; }
+  .node-name { font: 500 10px/1 var(--mono); color: var(--muted); grid-column: 1 / -1; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 4px; }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pair label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+
+  .status { display: grid; gap: 6px; }
+  .pill { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; transform: translateY(-1px); }
+  .pill[data-state="warn"]::before { background: var(--warn); }
+  .pill[data-state="warn"] { color: var(--ink); }
+  .pill .chip-btn { margin-top: 6px; }
+
+  .maps { display: grid; gap: 6px; }
+  .maps figure { margin: 0; display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; }
+  .maps figcaption { position: static; font: 400 11px/1.2 var(--mono); color: var(--muted); letter-spacing: 0; }
+  .maps canvas { width: 100%; height: 26px; border-radius: 4px; display: block; image-rendering: auto; }
+
+  .slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 13px; }
+  .slider output { font: 400 12px/1.6 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+
+  pre.cfg {
+    margin: 0; padding: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+    font: 400 11.5px/1.55 var(--mono); max-height: 220px; overflow: auto; white-space: pre; color: var(--ink);
+  }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn { font: 700 14px/1 var(--body); padding: 11px 16px; border-radius: 8px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .toast { font-size: 13px; color: var(--ok); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .touch-note { display: none; padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  @media (hover: none) { .touch-note { display: block; } }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1 class="brand">diff<b>map</b></h1>
+    <p class="lede">A difference cursor with your colors. Move over the sample site: images get the full 8-node map, text and everything else gets the closest cross-browser match.</p>
+    <span class="where" id="where">Playground · nothing is saved</span>
+  </header>
+  <p class="touch-note">This effect needs a mouse or trackpad. Open the page on a computer to try the cursor; you can still edit and copy a palette here.</p>
+
+  <div class="grid">
+    <div class="stage" id="stage">
+      <div class="stage-bar"><i></i><i></i><i></i><span>yoursite.com</span></div>
+      <div class="site">
+        <nav><a href="#stage">Studio Halden</a><a href="#stage">Work</a><a href="#stage">Journal</a><a href="#stage">Contact</a></nav>
+        <h2>Light, inverted on purpose.</h2>
+        <p>Black text on white is where most sites start. Hover it, then hover the photo, the swatches and the dark band below.</p>
+        <a class="cta" href="#stage">See the work</a>
+        <figure id="photoFig">
+          <img id="photo" src="dusk.jpg" alt="A red boat on a lake at dusk, green hills and an orange sky" data-diffmap>
+          <figcaption>Text over an image</figcaption>
+          <label class="drop-hint" for="ownImage">Drop or pick your own image</label>
+          <input type="file" id="ownImage" accept="image/*" class="visually-hidden">
+        </figure>
+        <div class="strip" id="strip"></div>
+        <div class="dark">
+          <h3>Light text on dark</h3>
+          <p>Your second section probably looks like this. The cursor uses the same map here.</p>
+          <a class="cta" href="#stage">Get in touch</a>
+        </div>
+      </div>
+    </div>
+
+    <aside class="rail" aria-label="Palette controls">
+      <section class="ctl">
+        <h4>Effect</h4>
+        <div class="seg" role="group" aria-label="Effect">
+          <button type="button" id="modeDiff" aria-pressed="true">Difference</button>
+          <button type="button" id="modeDuo" aria-pressed="false">Duotone</button>
+        </div>
+        <p class="hint" id="modeHint">Each color turns into its opposite, and you choose what every opposite looks like.</p>
+      </section>
+
+      <section class="ctl" id="nodesCtl">
+        <h4><span>Nodes</span><span>input → output</span></h4>
+        <div class="presets" id="presets"></div>
+        <div class="nodes" id="nodes"></div>
+      </section>
+
+      <section class="ctl" id="duoCtl" hidden>
+        <h4>Stops</h4>
+        <div class="pair">
+          <label>Dark areas become<span class="pick"><input type="color" id="stop0"><input type="text" id="stop0t" aria-label="Dark stop hex"></span></label>
+          <label>Light areas become<span class="pick"><input type="color" id="stop1"><input type="text" id="stop1t" aria-label="Light stop hex"></span></label>
+        </div>
+      </section>
+
+      <section class="ctl" id="anchorCtl">
+        <h4>Your site's colors</h4>
+        <p class="hint">Text and other page content can follow only part of the map. These two colors always land exactly.</p>
+        <div class="pair">
+          <label>Text<span class="pick"><input type="color" id="anc0"><input type="text" id="anc0t" aria-label="Text color hex"></span></label>
+          <label>Background<span class="pick"><input type="color" id="anc1"><input type="text" id="anc1t" aria-label="Background color hex"></span></label>
+        </div>
+        <div class="status" id="status"></div>
+      </section>
+
+      <section class="ctl" id="mapsCtl">
+        <h4>What the map does</h4>
+        <div class="maps">
+          <figure><figcaption>Input</figcaption><canvas id="mapIn" width="240" height="26"></canvas></figure>
+          <figure><figcaption>Images, video</figcaption><canvas id="mapImg" width="240" height="26"></canvas></figure>
+          <figure><figcaption>Text, UI</figcaption><canvas id="mapTxt" width="240" height="26"></canvas></figure>
+        </div>
+      </section>
+
+      <section class="ctl">
+        <h4>Cursor</h4>
+        <label class="slider">Size<output id="sizeOut"></output><input type="range" id="size" min="12" max="200" step="1"></label>
+        <label class="slider">Over links and buttons<output id="growOut"></output><input type="range" id="grow" min="12" max="320" step="1"></label>
+        <label class="slider">Follow smoothing<output id="easeOut"></output><input type="range" id="ease" min="0.05" max="1" step="0.01"></label>
+      </section>
+
+      <section class="ctl">
+        <h4><span>Config</span><span id="cfgName">diffmap.config.json</span></h4>
+        <pre class="cfg" id="cfg"></pre>
+        <div class="actions">
+          <button class="btn" id="save" type="button" hidden>Save to project</button>
+          <button class="btn ghost" id="copy" type="button">Copy config</button>
+          <span class="toast" id="toast" role="status"></span>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script type="module">
+  import { diffmap, resolvePalette, lookup, applyFallback, coverage, CORNERS, CORNER_RGB, invertNodes, toHex, parseColor, PRESETS as PRESET_MAPS, fitToRange } from './src/index.js';
+
+  const $ = (id) => document.getElementById(id);
+  const PRESETS = Object.fromEntries(Object.entries(PRESET_MAPS).map(([k, v]) => [k[0].toUpperCase() + k.slice(1), v]));
+  const ORDER = ['black', 'white', 'red', 'cyan', 'green', 'magenta', 'blue', 'yellow'];
+  const DEFAULT = { mode: 'difference', nodes: { ...PRESETS.Classic }, anchors: ['#111111', '#ffffff'], stops: ['#1a1aff', '#ff5a36'], size: 36, grow: 96, ease: 0.2 };
+
+  let state = load() ?? structuredClone(DEFAULT);
+  let cli = null;      // { path } when served by `npx diffmap setup`
+  let cursor = null;
+
+  function load() { try { return JSON.parse(localStorage.getItem('diffmap-playground')); } catch { return null; } }
+  function persist() { try { localStorage.setItem('diffmap-playground', JSON.stringify(state)); } catch {} }
+
+  // ---------------------------------------------------------------- config
+  function palette() {
+    return state.mode === 'duotone'
+      ? { mode: 'duotone', stops: [...state.stops] }
+      : { mode: 'difference', nodes: { ...state.nodes }, anchors: [...state.anchors] };
+  }
+  function config() {
+    return { palette: palette(), size: state.size, grow: { size: state.grow }, ease: state.ease };
+  }
+
+  // ---------------------------------------------------------------- cursor
+  let rebuild = 0;
+  function restart() {
+    cursor?.destroy();
+    cursor = diffmap({ ...config(), media: 'img[data-diffmap]' });
+  }
+  function applyPalette() {
+    clearTimeout(rebuild);
+    rebuild = setTimeout(() => { if (cursor?.enabled) cursor.setPalette(palette()); else restart(); }, 40);
+  }
+
+  // ---------------------------------------------------------------- UI build
+  function swatchDots(nodes) {
+    return ['red', 'green', 'blue', 'black'].map((k) => `<i style="background:${nodes[k]}"></i>`).join('');
+  }
+  for (const [name, nodes] of Object.entries(PRESETS)) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip-btn';
+    b.innerHTML = `<span class="dots">${swatchDots(nodes)}</span>${name}`;
+    b.addEventListener('click', () => { state.nodes = { ...nodes }; render(); applyPalette(); });
+    $('presets').append(b);
+  }
+
+  for (const k of ORDER) {
+    const row = document.createElement('div');
+    row.className = 'node';
+    row.innerHTML = `<span class="node-name">${k}</span><span class="in" style="background:${toHex(CORNER_RGB[k])}"></span><span class="arrow">→</span>
+      <span class="pick"><input type="color" id="n-${k}" aria-label="${k} becomes"><input type="text" id="n-${k}-t" aria-label="${k} hex" spellcheck="false"></span>`;
+    $('nodes').append(row);
+    bindColor(`n-${k}`, () => state.nodes[k], (v) => { state.nodes[k] = v; });
+  }
+  bindColor('anc0', () => state.anchors[0], (v) => { state.anchors[0] = v; });
+  bindColor('anc1', () => state.anchors[1], (v) => { state.anchors[1] = v; });
+  bindColor('stop0', () => state.stops[0], (v) => { state.stops[0] = v; });
+  bindColor('stop1', () => state.stops[1], (v) => { state.stops[1] = v; });
+
+  function bindColor(id, get, set) {
+    const c = $(id), t = $(id + 't') ?? $(id + '-t');
+    c.addEventListener('input', () => { set(c.value); t.value = c.value; changed(); });
+    t.addEventListener('change', () => {
+      try { const hex = toHex(parseColor(t.value)); set(hex); c.value = hex; t.value = hex; changed(); }
+      catch { t.value = get(); }
+    });
+  }
+
+  for (const [id, key, fmt] of [['size', 'size', (v) => `${v}px`], ['grow', 'grow', (v) => `${v}px`], ['ease', 'ease', (v) => (v >= 1 ? 'off' : v.toFixed(2))]]) {
+    $(id).addEventListener('input', () => { state[key] = Number($(id).value); $(id + 'Out').textContent = fmt(state[key]); persist(); renderConfig(); });
+    $(id).addEventListener('change', restart);
+  }
+
+  $('modeDiff').addEventListener('click', () => { state.mode = 'difference'; render(); applyPalette(); });
+  $('modeDuo').addEventListener('click', () => { state.mode = 'duotone'; render(); applyPalette(); });
+
+  function changed() { persist(); renderStatus(); renderMaps(); renderConfig(); applyPalette(); }
+
+  // sample strip: the 8 corner colors
+  for (const k of ORDER) {
+    const d = document.createElement('div');
+    const c = CORNER_RGB[k];
+    d.style.background = toHex(c);
+    d.style.color = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11 > 0.5 ? '#111' : '#fff';
+    d.textContent = k;
+    $('strip').append(d);
+  }
+
+  // ---------------------------------------------------------------- render
+  function render() {
+    const duo = state.mode === 'duotone';
+    $('modeDiff').setAttribute('aria-pressed', String(!duo));
+    $('modeDuo').setAttribute('aria-pressed', String(duo));
+    $('modeHint').textContent = duo
+      ? 'Everything becomes a two-color ramp: brightness picks a point between your dark and light stop. Works the same in every browser.'
+      : 'Each color turns into its opposite, and you choose what every opposite looks like.';
+    $('nodesCtl').hidden = duo; $('anchorCtl').hidden = duo; $('duoCtl').hidden = !duo;
+    for (const k of ORDER) { $(`n-${k}`).value = state.nodes[k]; $(`n-${k}-t`).value = state.nodes[k]; }
+    $('anc0').value = $('anc0t').value = state.anchors[0];
+    $('anc1').value = $('anc1t').value = state.anchors[1];
+    $('stop0').value = $('stop0t').value = state.stops[0];
+    $('stop1').value = $('stop1t').value = state.stops[1];
+    $('size').value = state.size; $('sizeOut').textContent = `${state.size}px`;
+    $('grow').value = state.grow; $('growOut').textContent = `${state.grow}px`;
+    $('ease').value = state.ease; $('easeOut').textContent = state.ease >= 1 ? 'off' : state.ease.toFixed(2);
+    persist(); renderStatus(); renderMaps(); renderConfig();
+  }
+
+  function renderStatus() {
+    if (state.mode === 'duotone') return;
+    const r = resolvePalette(palette());
+    const fb = r.fallback;
+    const out = [];
+    const anchorOk = fb.exact.every(Boolean);
+    out.push(anchorOk
+      ? ['ok', 'Text and background land exactly on your map.']
+      : ['warn', `Text or background is off by up to ${Math.round(maxAnchorError(r) * 255)} levels. Move the matching nodes closer to a straight line, or pick less extreme site colors.`]);
+    const cov = Math.round(coverage(fb, r.nodes) * 255);
+    out.push(cov <= 1
+      ? ['ok', 'Images and video show the full map exactly.']
+      : cov <= 12
+        ? ['ok', `Images and video match the map within ${cov} levels, too little to see.`]
+        : ['warn', `Images are off by up to ${cov} levels: some nodes are brighter or darker than your black and white nodes allow. <button type="button" class="chip-btn" id="fitRange">Pull nodes into range</button>`]);
+    const err = Math.round(fb.error * 255);
+    out.push(err <= 2
+      ? ['ok', 'All other page colors match the map exactly.']
+      : ['ok', `Other page colors follow the map within ${err} levels; the closer your nodes are to a straight line per channel, the closer they get.`]);
+    $('status').innerHTML = out.map(([s, t]) => `<p class="pill" data-state="${s}"><span>${t}</span></p>`).join('');
+    $('fitRange')?.addEventListener('click', () => { state.nodes = fitToRange(state.nodes); render(); applyPalette(); });
+  }
+  function maxAnchorError(r) {
+    return Math.max(...r.fallback.exact.map((_, i) => {
+      const a = parseColor(state.anchors[i]);
+      const want = lookup(r.nodes, a), got = applyFallback(r.fallback, a);
+      return Math.max(...want.map((v, j) => Math.abs(v - got[j])));
+    }));
+  }
+
+  // Input strip: hue across, lightness down. Then the same pixels through each engine.
+  function renderMaps() {
+    const r = resolvePalette(palette());
+    const W = 240, H = 26;
+    const draw = (id, fn) => {
+      const ctx = $(id).getContext('2d');
+      const im = ctx.createImageData(W, H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const c = fn(hsl(x / W, 1, 1 - (y + 0.5) / H));
+        const i = (y * W + x) * 4;
+        im.data[i] = c[0] * 255; im.data[i + 1] = c[1] * 255; im.data[i + 2] = c[2] * 255; im.data[i + 3] = 255;
+      }
+      ctx.putImageData(im, 0, 0);
+    };
+    const lum = (c) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+    const duo = (c) => r.fallback.A.map((a, i) => a + (r.fallback.B[i] - a) * lum(c));
+    draw('mapIn', (c) => c);
+    draw('mapImg', r.duotone ? duo : (c) => lookup(r.nodes, c));
+    draw('mapTxt', r.duotone ? duo : (c) => applyFallback(r.fallback, c));
+  }
+  function hsl(h, s, l) {
+    const k = (n) => (n + h * 12) % 12, a = s * Math.min(l, 1 - l);
+    return [0, 8, 4].map((n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)));
+  }
+
+  function renderConfig() { $('cfg').textContent = JSON.stringify(config(), null, 2); }
+
+  // ---------------------------------------------------------------- own image
+  const fig = $('photoFig');
+  function useFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    $('photo').src = URL.createObjectURL(file);
+    $('photo').addEventListener('load', restart, { once: true });
+  }
+  $('ownImage').addEventListener('change', (e) => useFile(e.target.files[0]));
+  fig.addEventListener('dragover', (e) => { e.preventDefault(); fig.classList.add('dragging'); });
+  fig.addEventListener('dragleave', () => fig.classList.remove('dragging'));
+  fig.addEventListener('drop', (e) => { e.preventDefault(); fig.classList.remove('dragging'); useFile(e.dataTransfer.files[0]); });
+
+  // ---------------------------------------------------------------- copy / save
+  function toast(msg) { $('toast').textContent = msg; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').textContent = ''), 4000); }
+  $('copy').addEventListener('click', async () => {
+    const text = JSON.stringify(config(), null, 2);
+    try { await navigator.clipboard.writeText(text); toast('Copied'); }
+    catch {
+      const sel = getSelection(); const range = document.createRange();
+      range.selectNodeContents($('cfg')); sel.removeAllRanges(); sel.addRange(range);
+      toast('Selected — press Ctrl/Cmd+C');
+    }
+  });
+  $('save').addEventListener('click', async () => {
+    $('save').disabled = true;
+    try {
+      const r = await fetch('api/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(config()) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      toast(`Saved to ${j.path}. You can close this tab.`);
+    } catch (e) { toast(`Couldn't save: ${e.message}. Is the setup command still running?`); }
+    $('save').disabled = false;
+  });
+
+  // ---------------------------------------------------------------- boot
+  async function detectCli() {
+    try {
+      const r = await fetch('api/config', { cache: 'no-store' });
+      if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return;
+      const j = await r.json();
+      if (!j.diffmap) return;
+      cli = j;
+      document.title = 'diffmap Setup';
+      $('where').textContent = `Setup · saves to ${j.display ?? j.path}`;
+      $('where').dataset.live = 'true';
+      $('cfgName').textContent = j.path.split(/[\\/]/).pop();
+      $('save').hidden = false;
+      if (j.config) fromConfig(j.config);
+    } catch {}
+  }
+  function fromConfig(c) {
+    const p = c.palette ?? {};
+    state.mode = p.mode === 'duotone' ? 'duotone' : 'difference';
+    state.nodes = { ...invertNodes(), ...(p.nodes ?? {}) };
+    for (const k of ORDER) state.nodes[k] = toHex(parseColor(state.nodes[k]));
+    if (p.anchors?.length === 2) state.anchors = p.anchors.map((x) => toHex(parseColor(x)));
+    if (p.stops?.length === 2) state.stops = p.stops.map((x) => toHex(parseColor(x)));
+    if (c.size) state.size = c.size;
+    if (c.grow?.size) state.grow = c.grow.size;
+    if (c.ease) state.ease = c.ease;
+  }
+
+  await detectCli();
+  render();
+  restart();
+</script>

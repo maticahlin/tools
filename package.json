@@ -1,0 +1,14 @@
+{
+  "name": "maticahlin-tools",
+  "private": true,
+  "description": "Building blocks for websites, from tools.maticahlin.com",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "npm test --workspaces"
+  },
+  "devDependencies": {
+    "@sparticuz/chromium": "*",
+    "playwright": "1.56.0",
+    "pngjs": "^7.0.0"
+  }
+}
