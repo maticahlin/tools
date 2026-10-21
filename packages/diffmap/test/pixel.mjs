@@ -95,9 +95,14 @@ function compareCircle(before, after, cx, cy, r, rects, pal) {
       continue;
     }
     const want = target(pal, b, onImage);
-    (onImage ? res.image : res.page).push(Math.max(...a.map((v, i) => Math.abs(v - want[i]))) * 255);
+    const err = Math.max(...a.map((v, i) => Math.abs(v - want[i]))) * 255;
+    (onImage ? res.image : res.page).push(err);
+    if (err > 8 && (res.bad ??= []).length < 12) {
+      const rgb = (c) => c.map((v) => Math.round(v * 255)).join(',');
+      res.bad.push(`(${x},${y}) d=${(r - d).toFixed(1)} before ${rgb(b)} after ${rgb(a)} want ${rgb(want)}`);
+    }
   }
-  return { page: stat(res.page), image: stat(res.image), rim: stat(res.rim), vis: crop(after, Math.floor(cx - r - 4), Math.floor(cy - r - 4), 2 * r + 9, 2 * r + 9) };
+  return { page: stat(res.page), image: stat(res.image), rim: stat(res.rim), bad: res.bad, vis: crop(after, Math.floor(cx - r - 4), Math.floor(cy - r - 4), 2 * r + 9, 2 * r + 9) };
 }
 
 function compareText(before, after, box, rects, pal) {
@@ -187,10 +192,11 @@ for (const engine of engines) {
       }
       if (!ok) failed = true;
       fs.writeFileSync(path.join(OUT, `${engine}-${cur}-${name}-${spot}.png`), PNG.sync.write(c.vis));
-      report.push({ engine, cursor: cur, palette: name, spot, ...Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'vis')) });
+      report.push({ engine, cursor: cur, palette: name, spot, ...Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'vis' && k !== 'bad')) });
       const row = `${ok ? 'ok  ' : 'FAIL'} ${cur.padEnd(6)} ${name.padEnd(8)} ${spot.padEnd(16)} ${line}`;
       console.log(row);
       if (!ok || process.env.ANNOTATE_ALL) annotate.push(row);
+      if (!ok && c.bad) for (const b of c.bad) { console.log('     ' + b); annotate.push('     ' + b); }
     }
   }
   await d.close();
