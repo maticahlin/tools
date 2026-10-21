@@ -377,16 +377,13 @@ function textShape(cursor, { mkLayer, move, space }) {
         data[i] = col[0] * 255 + 0.5; data[i + 1] = col[1] * 255 + 0.5; data[i + 2] = col[2] * 255 + 0.5; data[i + 3] = 255;
       }
       el.style.width = W + 'px'; el.style.height = H + 'px';
-      if (space === 'srgb') {
-        tctx.putImageData(new ImageData(data, w, h), 0, 0);
-        el.style.backgroundImage = `url("${tmp.toDataURL()}")`;
-      } else {
-        // Display P3 numbers: keep them in a P3 canvas inside the layer, so nothing converts them
-        let cv = el.firstChild;
-        if (!cv) { cv = document.createElement('canvas'); cv.style.cssText = 'display:block;width:100%;height:100%'; el.appendChild(cv); }
-        cv.width = w; cv.height = h;
-        cv.getContext('2d', { colorSpace: space }).putImageData(new ImageData(data, w, h, { colorSpace: space }), 0, 0);
-      }
+      // Always a plain background image, never a <canvas> element: WebKit gives canvases their
+      // own compositing layer and then doesn't blend them with the page. In P3 the PNG comes
+      // from a P3 canvas, so it carries the Display P3 numbers as they are.
+      const cv = space === 'srgb' ? tmp : Object.assign(document.createElement('canvas'), { width: w, height: h });
+      const cx = space === 'srgb' ? tctx : cv.getContext('2d', { colorSpace: space });
+      cx.putImageData(space === 'srgb' ? new ImageData(data, w, h) : new ImageData(data, w, h, { colorSpace: space }), 0, 0);
+      el.style.backgroundImage = `url("${cv.toDataURL()}")`;
     });
     lum.style.width = W + 'px'; lum.style.height = H + 'px';
     for (const pr of ['maskImage', 'webkitMaskImage']) lum.style[pr] = `url("${glyphs.maskUrl}")`;
@@ -534,18 +531,13 @@ function createMedia(opt, pal, areaPalette) {
         return;
       }
       recolor(data.data, it.palette);
+      let out = c;
       if (space !== 'srgb') {
-        // the pre-corrected pixels are Display P3 numbers: hand them over in a P3 canvas
-        const pc = document.createElement('canvas');
-        pc.width = w; pc.height = h;
-        const pctx = pc.getContext('2d', { colorSpace: space });
-        pctx.putImageData(new ImageData(data.data, w, h, { colorSpace: space }), 0, 0);
-        mount(it, pc);
-        it.state = 'ready';
-        return;
-      }
-      ctx.putImageData(data, 0, 0);
-      c.toBlob((blob) => {
+        // the pre-corrected pixels are Display P3 numbers: encode them from a P3 canvas
+        out = Object.assign(document.createElement('canvas'), { width: w, height: h });
+        out.getContext('2d', { colorSpace: space }).putImageData(new ImageData(data.data, w, h, { colorSpace: space }), 0, 0);
+      } else ctx.putImageData(data, 0, 0);
+      out.toBlob((blob) => {
         if (!blob || !items.has(el)) return;
         // A plain div with a background, not an <img>/<canvas>: WebKit may give those their
         // own compositing layer, and blend modes can't see into separate layers there.
