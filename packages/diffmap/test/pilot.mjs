@@ -33,7 +33,9 @@ for (const engine of engines) {
     }
     const top = (t) => Object.entries(t).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
     const over = { white: top(tally.white), red: top(tally.red) };
-    console.log(`  ${mode.padEnd(8)} glyphs over white: rgb(${over.white})   glyphs over red: rgb(${over.red})`);
+    const row = `${engine} ${mode.padEnd(8)} glyphs over white: rgb(${over.white})   glyphs over red: rgb(${over.red})`;
+    console.log('  ' + row);
+    if (process.env.GITHUB_ACTIONS) console.log(`::notice title=brand label ${engine} ${mode}::${row}`);
     if (mode === 'diffmap') {
       const near = (s, t) => s.split(',').map(Number).every((v, k) => Math.abs(v - t[k]) <= 1);
       if (!near(over.white, [255, 20, 8]) || !near(over.red, [255, 255, 255])) failed = true;

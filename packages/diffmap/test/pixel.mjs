@@ -139,6 +139,7 @@ const url = `http://127.0.0.1:${server.address().port}/test/fixture/index.html`;
 const R = 130;
 const report = [];
 let failed = false;
+const annotate = [];
 const paint = PNG.sync.read(fs.readFileSync(path.join(ROOT, 'test/fixture/paint.png')));
 const fmt = (s) => (s ? `p99 ${s.p99} max ${s.max}` : '—');
 const okErr = (s) => !s || (s.p99 <= 3 && s.max <= 8);
@@ -187,11 +188,19 @@ for (const engine of engines) {
       if (!ok) failed = true;
       fs.writeFileSync(path.join(OUT, `${engine}-${cur}-${name}-${spot}.png`), PNG.sync.write(c.vis));
       report.push({ engine, cursor: cur, palette: name, spot, ...Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'vis')) });
-      console.log(`${ok ? 'ok  ' : 'FAIL'} ${cur.padEnd(6)} ${name.padEnd(8)} ${spot.padEnd(16)} ${line}`);
+      const row = `${ok ? 'ok  ' : 'FAIL'} ${cur.padEnd(6)} ${name.padEnd(8)} ${spot.padEnd(16)} ${line}`;
+      console.log(row);
+      if (!ok || process.env.ANNOTATE_ALL) annotate.push(row);
     }
   }
   await d.close();
 }
 fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
+if (process.env.GITHUB_ACTIONS) {
+  // annotations are readable through the API even where raw logs aren't
+  const esc = (t) => t.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+  const lines = annotate.join('\n');
+  console.log(`::${failed ? 'error' : 'notice'} title=pixel ${engines.join(',')}::${esc(lines.slice(0, 60000))}`);
+}
 server.close();
 process.exit(failed ? 1 : 0);

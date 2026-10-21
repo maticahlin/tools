@@ -42,10 +42,13 @@ jobs:
       - run: npm run build
       - name: Pixel test (sources)
         run: node packages/diffmap/test/pixel.mjs ${{ matrix.browser }}
+        env: { ANNOTATE_ALL: '1' }
       - name: Pixel test (minified bundle, swap palette)
+        if: always()
         run: node packages/diffmap/test/pixel.mjs ${{ matrix.browser }}
         env: { DIST: '1', PALETTES: swap }
       - name: Brand label (pilotprojekt case)
+        if: always()
         run: node packages/diffmap/test/pilot.mjs ${{ matrix.browser }}
       - name: Blend check screenshot
         if: always()
