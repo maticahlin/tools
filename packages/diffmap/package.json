@@ -13,7 +13,7 @@
   },
   "main": "./src/index.js",
   "bin": { "diffmap": "./bin/diffmap.js" },
-  "files": ["src", "bin", "setup/index.html", "setup/dusk.jpg", "agents", "AGENTS.md", "README.md"],
+  "files": ["src", "bin", "setup/index.html", "setup/dusk.jpg", "setup/temeraire.jpg", "agents", "AGENTS.md", "README.md"],
   "sideEffects": true,
   "engines": { "node": ">=18" },
   "scripts": {

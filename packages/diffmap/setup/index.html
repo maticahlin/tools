@@ -1,240 +1,250 @@
 <title>diffmap Playground</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;900&family=Martian+Mono:wght@400;500&display=swap">
 <style>
-  /* Layout: a sample website on the left (the cursor's test bench), a sticky control rail on the right. */
+  /* Layout: the sample site on the left is the test bench; the control rail on the right is a stack of
+     white-ruled boxes. One type size, Arial, black and white only — color appears only where it is the data. */
   :root {
-    --paper: #f3f4f7;      /* page ground, cool grey */
-    --panel: #ffffff;
-    --ink: #13151a;
-    --muted: #5b6270;
-    --line: #dadee6;
-    --accent: #3a35e6;     /* ultramarine: controls and focus */
-    --ok: #137a4b;
-    --warn: #a35a00;
-    --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
-    --body: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
-    --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --paper: #101217; --panel: #171a21; --ink: #eceef3; --muted: #9aa1ae; --line: #2a2f3a;
-      --accent: #8f8bff; --ok: #4fd19a; --warn: #f2b14a; color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --paper: #101217; --panel: #171a21; --ink: #eceef3; --muted: #9aa1ae; --line: #2a2f3a;
-    --accent: #8f8bff; --ok: #4fd19a; --warn: #f2b14a; color-scheme: dark;
+    --bg: #000000;
+    --fg: #ffffff;
+    --dim: #ffffff;          /* hints use italic, not grey */
+    --rule: #ffffff;
+    --font: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    --size: 13px;
+    --gap: 12px;
+    color-scheme: dark;
   }
 
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; border-radius: 0 !important; }
   [hidden] { display: none !important; }
-  html, body { background: var(--paper); }
+  html, body { background: var(--bg); }
   body {
-    color: var(--ink); font: 400 15px/1.5 var(--body);
+    color: var(--fg); font: 400 var(--size)/1.45 var(--font);
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 20px 40px;
+    padding-block: 16px 40px;
   }
-  .wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 20px; }
+  h1, h2, h3, h4, p, figure { margin: 0; font-size: var(--size); }
+  b, strong, h1, h4 { font-weight: 700; }
+  em, .hint { font-style: italic; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 1px solid var(--fg); outline-offset: 2px; }
 
-  /* ---------- header */
-  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
-  .brand { font: 900 30px/1 var(--display); letter-spacing: -0.03em; margin: 0; }
-  .brand b { font-weight: 900; color: var(--accent); }
-  .lede { color: var(--muted); margin: 0; max-width: 62ch; }
-  .where { margin-left: auto; font: 400 11px/1.4 var(--mono); color: var(--muted); letter-spacing: 0.02em; }
-  .where[data-live="true"] { color: var(--ok); }
+  .wrap { max-width: 1360px; margin: 0 auto; display: grid; gap: var(--gap); }
 
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
-  @media (max-width: 980px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  header { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; border: 1px solid var(--rule); padding: 10px 12px; }
+  header p { flex: 1 1 380px; }
+  #where { font-style: italic; }
+  #where[data-live="true"] { font-style: normal; font-weight: 700; }
 
-  /* ---------- stage: a stand-in website with fixed colors, independent of the theme */
-  .stage {
-    background: #ffffff; color: #111111; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
-    min-width: 0;
-  }
-  .stage-bar {
-    display: flex; gap: 6px; align-items: center; padding: 9px 12px; background: #eceef2; border-bottom: 1px solid #d9dce2;
-    font: 400 11px/1 var(--mono); color: #6a707c;
-  }
-  .stage-bar i { width: 9px; height: 9px; border-radius: 50%; background: #c9cdd5; display: inline-block; }
-  .stage-bar span { margin-left: 8px; }
-  .site { padding: 26px clamp(18px, 4vw, 44px) 0; display: grid; gap: 22px; }
-  .site nav { display: flex; flex-wrap: wrap; gap: 6px 22px; font-weight: 500; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: var(--gap); align-items: start; }
+  @media (max-width: 1000px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- the sample site (its own colors: it stands in for a real website) */
+  .stage { border: 1px solid var(--rule); background: #fff; color: #111; min-width: 0; overflow: hidden; }
+  .stage-bar { padding: 6px 10px; background: #000; color: #fff; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; gap: 8px; }
+  .site { padding: 24px clamp(16px, 4vw, 40px) 0; display: grid; gap: 20px; font-family: var(--font); }
+  .site nav { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 15px; font-weight: 700; }
   .site nav a { color: inherit; text-decoration: none; }
-  .site nav a:first-child { font-weight: 900; margin-right: auto; letter-spacing: -0.02em; }
-  .site h2 { margin: 6px 0 0; font: 900 clamp(40px, 7.4vw, 92px)/0.92 var(--display); letter-spacing: -0.045em; text-wrap: balance; }
-  .site p { margin: 0; max-width: 46ch; font-size: 17px; color: #333; }
-  .cta { display: inline-flex; width: fit-content; padding: 12px 20px; border-radius: 999px; background: #111; color: #fff; font-weight: 700; text-decoration: none; }
-  figure { margin: 0 calc(-1 * clamp(18px, 4vw, 44px)); position: relative; }
-  figure img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; max-width: 100%; }
-  figcaption {
-    position: absolute; left: clamp(18px, 4vw, 44px); bottom: 22px; right: 18px;
-    color: #fff; font: 900 clamp(26px, 4.4vw, 52px)/0.95 var(--display); letter-spacing: -0.03em; pointer-events: none;
-  }
-  .drop-hint { position: absolute; right: 14px; top: 14px; font: 500 11px/1 var(--mono); color: #fff; background: rgba(0,0,0,.45); padding: 7px 9px; border-radius: 6px; }
-  figure.dragging { outline: 3px dashed #3a35e6; outline-offset: -8px; }
-  .strip { display: grid; grid-template-columns: repeat(8, 1fr); margin: 0 calc(-1 * clamp(18px, 4vw, 44px)); }
-  .strip div { aspect-ratio: 1 / 1.2; display: flex; align-items: end; padding: 8px; font: 500 10px/1 var(--mono); }
-  .dark { margin: 0 calc(-1 * clamp(18px, 4vw, 44px)); background: #111; color: #f5f5f5; padding: 34px clamp(18px, 4vw, 44px) 40px; display: grid; gap: 14px; }
-  .dark h3 { margin: 0; font: 900 clamp(28px, 4vw, 44px)/1 var(--display); letter-spacing: -0.03em; }
+  .site nav a:first-child { margin-right: auto; }
+  .site h2 { font: 700 clamp(40px, 7.2vw, 92px)/0.92 var(--font); letter-spacing: -0.04em; text-wrap: balance; }
+  .site p { max-width: 46ch; font-size: 17px; }
+  .cta { display: inline-block; width: fit-content; padding: 12px 20px; background: #111; color: #fff; font-weight: 700; font-size: 15px; text-decoration: none; }
+  .bleed { margin-inline: calc(-1 * clamp(16px, 4vw, 40px)); }
+  .photo { position: relative; }
+  .photo img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; max-width: 100%; }
+  .photo figcaption { position: absolute; left: clamp(16px, 4vw, 40px); bottom: 20px; right: 16px; color: #fff; font: 700 clamp(26px, 4.4vw, 52px)/0.95 var(--font); letter-spacing: -0.03em; pointer-events: none; }
+  .strips { display: grid; }
+  .strip-label { padding: 8px clamp(16px, 4vw, 40px); font-size: 13px; background: #fff; }
+  .strip { display: grid; grid-template-columns: repeat(8, 1fr); }
+  .strip div { aspect-ratio: 1 / 0.8; }
+  .strip-img { display: block; width: 100%; aspect-ratio: 10 / 1; max-width: 100%; }
+  .dark { background: #111; color: #f5f5f5; padding: 34px clamp(16px, 4vw, 40px) 40px; display: grid; gap: 14px; }
+  .dark h3 { font: 700 clamp(28px, 4vw, 44px)/1 var(--font); letter-spacing: -0.03em; }
   .dark p { color: #bdbdbd; }
   .dark .cta { background: #f5f5f5; color: #111; }
 
   /* ---------- control rail */
-  .rail {
-    position: sticky; top: max(12px, env(safe-area-inset-top, 0px)); display: grid; gap: 0;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-width: 0;
-    max-height: calc(100dvh - 24px); overflow: auto;
-  }
-  @media (max-width: 980px) { .rail { position: static; max-height: none; } }
-  section.ctl { padding: 16px 18px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
-  section.ctl:first-child { border-top: 0; }
-  .ctl h4 { margin: 0; font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
-  .hint { margin: 0; color: var(--muted); font-size: 13px; }
+  .rail { display: grid; min-width: 0; position: sticky; top: max(12px, env(safe-area-inset-top, 0px)); max-height: calc(100dvh - 24px); overflow: auto; }
+  @media (max-width: 1000px) { .rail { position: static; max-height: none; } }
+  .box { border: 1px solid var(--rule); padding: 12px; display: grid; gap: 10px; }
+  .box + .box { border-top: 0; }
+  .box h4 { display: flex; justify-content: space-between; gap: 8px; }
+  .box h4 span { font-weight: 400; font-style: italic; }
 
-  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 3px; }
-  .seg button { font: 700 14px/1 var(--body); padding: 9px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
-  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--rule); }
+  .seg button { background: transparent; border: 0; border-left: 1px solid var(--rule); padding: 8px; cursor: pointer; }
+  .seg button:first-child { border-left: 0; }
+  .seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); font-weight: 700; }
 
-  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip-btn { font: 500 12px/1 var(--body); padding: 7px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
-  .chip-btn:hover { border-color: var(--ink); }
-  .chip-btn .dots { display: inline-flex; }
-  .chip-btn .dots i { width: 9px; height: 9px; border-radius: 50%; margin-left: -3px; border: 1px solid var(--panel); }
+  .btn { background: transparent; border: 1px solid var(--rule); padding: 8px 12px; cursor: pointer; }
+  .btn:hover:not(:disabled) { background: var(--fg); color: var(--bg); }
+  .btn.solid { background: var(--fg); color: var(--bg); font-weight: 700; }
+  .btn:disabled { cursor: default; font-style: italic; border-style: dashed; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
-  .nodes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
-  .node { display: grid; grid-template-columns: 22px 12px 1fr; align-items: center; gap: 4px; min-width: 0; }
-  .node .in { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--line); }
-  .node .arrow { color: var(--muted); font-size: 11px; text-align: center; }
-  .pick { display: flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; min-width: 0; }
-  .pick input[type="color"] { width: 30px; height: 28px; border: 0; padding: 0; background: none; cursor: pointer; flex: none; }
-  .pick input[type="text"] { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 400 12px/1 var(--mono); padding: 0 6px; height: 28px; }
-  .node-name { font: 500 10px/1 var(--mono); color: var(--muted); grid-column: 1 / -1; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 4px; }
+  /* color inputs: a square swatch plus hex */
+  .pick { display: flex; border: 1px solid var(--rule); min-width: 0; }
+  .pick input[type="color"] { -webkit-appearance: none; appearance: none; width: 28px; height: 26px; border: 0; border-right: 1px solid var(--rule); padding: 0; background: none; cursor: pointer; flex: none; }
+  .pick input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .pick input[type="color"]::-webkit-color-swatch { border: 0; }
+  .pick input[type="color"]::-moz-color-swatch { border: 0; }
+  .pick input[type="text"] { width: 100%; min-width: 0; background: transparent; border: 0; padding: 0 6px; height: 26px; }
+  .chip { display: inline-block; width: 26px; height: 26px; border: 1px solid var(--rule); flex: none; }
+
+  .nodes { display: grid; grid-template-columns: auto 26px 14px minmax(0, 1fr) auto 26px; gap: 6px 6px; align-items: center; }
+  .nodes .head { font-style: italic; }
+  .nodes .arrow { text-align: center; }
 
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .pair label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  .pair label { display: grid; gap: 4px; }
 
-  .status { display: grid; gap: 6px; }
-  .pill { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
-  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; transform: translateY(-1px); }
-  .pill[data-state="warn"]::before { background: var(--warn); }
-  .pill[data-state="warn"] { color: var(--ink); }
-  .pill .chip-btn { margin-top: 6px; }
+  .status { display: grid; gap: 8px; }
+  .status p { display: grid; grid-template-columns: 16px 1fr; gap: 4px; }
+  .status p::before { content: "✓"; font-weight: 700; }
+  .status p[data-state="warn"]::before { content: "!"; }
 
-  .maps { display: grid; gap: 6px; }
-  .maps figure { margin: 0; display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; }
-  .maps figcaption { position: static; font: 400 11px/1.2 var(--mono); color: var(--muted); letter-spacing: 0; }
-  .maps canvas { width: 100%; height: 26px; border-radius: 4px; display: block; image-rendering: auto; }
+  .maps { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; }
+  .maps canvas { width: 100%; height: 22px; display: block; border: 1px solid var(--rule); }
 
-  .slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 13px; }
-  .slider output { font: 400 12px/1.6 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-  .slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+  .slider { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
+  .slider output { font-variant-numeric: tabular-nums; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; grid-column: 1 / -1; width: 100%; height: 18px; background: transparent; cursor: pointer; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--fg); }
+  input[type="range"]::-moz-range-track { height: 1px; background: var(--fg); }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -6px; background: var(--fg); border: 0; }
+  input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: var(--fg); border: 0; }
+  input[type="text"].plain { background: transparent; border: 1px solid var(--rule); padding: 6px 8px; width: 100%; }
 
-  pre.cfg {
-    margin: 0; padding: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
-    font: 400 11.5px/1.55 var(--mono); max-height: 220px; overflow: auto; white-space: pre; color: var(--ink);
-  }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .btn { font: 700 14px/1 var(--body); padding: 11px 16px; border-radius: 8px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; }
-  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-  .btn:disabled { opacity: .45; cursor: default; }
-  .toast { font-size: 13px; color: var(--ok); }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .touch-note { display: none; padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  pre.cfg { margin: 0; padding: 10px; border: 1px solid var(--rule); font: 400 var(--size)/1.45 ui-monospace, Menlo, Consolas, monospace; max-height: 240px; overflow: auto; white-space: pre; }
+  .toast { font-style: italic; }
+  .touch-note { border: 1px solid var(--rule); padding: 10px 12px; font-style: italic; display: none; }
   @media (hover: none) { .touch-note { display: block; } }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .credit { font-style: italic; }
 </style>
 
 <div class="wrap">
   <header>
-    <h1 class="brand">diff<b>map</b></h1>
-    <p class="lede">A difference cursor with your colors. Move over the sample site: images get the full 8-node map, text and everything else gets the closest cross-browser match.</p>
-    <span class="where" id="where">Playground · nothing is saved</span>
+    <h1>diffmap</h1>
+    <p>A difference cursor with your colors. Move over the sample site: images get the full 8-node map, everything else gets the closest match every browser can render.</p>
+    <span id="where">Playground, nothing is saved</span>
   </header>
-  <p class="touch-note">This effect needs a mouse or trackpad. Open the page on a computer to try the cursor; you can still edit and copy a palette here.</p>
+  <p class="touch-note">The cursor needs a mouse or trackpad. You can still build and copy a palette here.</p>
 
   <div class="grid">
-    <div class="stage" id="stage">
-      <div class="stage-bar"><i></i><i></i><i></i><span>yoursite.com</span></div>
+    <div class="stage">
+      <div class="stage-bar"><span>yoursite.com</span><span id="stageMode">Circle cursor</span></div>
       <div class="site">
-        <nav><a href="#stage">Studio Halden</a><a href="#stage">Work</a><a href="#stage">Journal</a><a href="#stage">Contact</a></nav>
+        <nav><a href="#top">Studio Halden</a><a href="#top">Work</a><a href="#top">Journal</a><a href="#top">Contact</a></nav>
         <h2>Light, inverted on purpose.</h2>
-        <p>Black text on white is where most sites start. Hover it, then hover the photo, the swatches and the dark band below.</p>
-        <a class="cta" href="#stage">See the work</a>
-        <figure id="photoFig">
+        <p>Black text on white is where most sites start. Hover it, then the photo, both color strips and the dark band below.</p>
+        <a class="cta" href="#top">See the work</a>
+        <figure class="photo bleed" id="photoFig">
           <img id="photo" src="dusk.jpg" alt="A red boat on a lake at dusk, green hills and an orange sky" data-diffmap>
           <figcaption>Text over an image</figcaption>
-          <label class="drop-hint" for="ownImage">Drop or pick your own image</label>
-          <input type="file" id="ownImage" accept="image/*" class="visually-hidden">
         </figure>
-        <div class="strip" id="strip"></div>
-        <div class="dark">
+        <div class="strips bleed">
+          <p class="strip-label"><b>Page colors.</b> <em>Plain CSS backgrounds: the closest straight-line match to your nodes.</em></p>
+          <div class="strip" id="strip"></div>
+          <p class="strip-label"><b>The same colors as an image.</b> <em>Exactly your nodes.</em></p>
+          <img class="strip-img" id="stripImg" alt="The eight node colors as an image" data-diffmap>
+        </div>
+        <div class="dark bleed">
           <h3>Light text on dark</h3>
           <p>Your second section probably looks like this. The cursor uses the same map here.</p>
-          <a class="cta" href="#stage">Get in touch</a>
+          <a class="cta" href="#top">Get in touch</a>
         </div>
       </div>
     </div>
 
     <aside class="rail" aria-label="Palette controls">
-      <section class="ctl">
+      <section class="box">
         <h4>Effect</h4>
         <div class="seg" role="group" aria-label="Effect">
           <button type="button" id="modeDiff" aria-pressed="true">Difference</button>
           <button type="button" id="modeDuo" aria-pressed="false">Duotone</button>
         </div>
-        <p class="hint" id="modeHint">Each color turns into its opposite, and you choose what every opposite looks like.</p>
+        <p class="hint" id="modeHint"></p>
       </section>
 
-      <section class="ctl" id="nodesCtl">
-        <h4><span>Nodes</span><span>input → output</span></h4>
-        <div class="presets" id="presets"></div>
-        <div class="nodes" id="nodes"></div>
+      <section class="box" id="nodesBox">
+        <h4>Nodes <span>what each color turns into</span></h4>
+        <div class="row" id="presets"></div>
+        <div class="nodes" id="nodes">
+          <span class="head">Color</span><span></span><span></span><span class="head">Images, video</span><span class="head">Page</span><span></span>
+        </div>
+        <p class="hint">Page is what plain CSS colors become. Browsers can only follow the nodes along a straight line per channel there, so it shows the closest match.</p>
       </section>
 
-      <section class="ctl" id="duoCtl" hidden>
+      <section class="box" id="duoBox" hidden>
         <h4>Stops</h4>
         <div class="pair">
-          <label>Dark areas become<span class="pick"><input type="color" id="stop0"><input type="text" id="stop0t" aria-label="Dark stop hex"></span></label>
-          <label>Light areas become<span class="pick"><input type="color" id="stop1"><input type="text" id="stop1t" aria-label="Light stop hex"></span></label>
+          <label>Dark areas become<span class="pick"><input type="color" id="stop0"><input type="text" id="stop0t" aria-label="Dark stop hex" spellcheck="false"></span></label>
+          <label>Light areas become<span class="pick"><input type="color" id="stop1"><input type="text" id="stop1t" aria-label="Light stop hex" spellcheck="false"></span></label>
         </div>
       </section>
 
-      <section class="ctl" id="anchorCtl">
-        <h4>Your site's colors</h4>
-        <p class="hint">Text and other page content can follow only part of the map. These two colors always land exactly.</p>
+      <section class="box" id="checkBox">
+        <h4>Exactness</h4>
         <div class="pair">
-          <label>Text<span class="pick"><input type="color" id="anc0"><input type="text" id="anc0t" aria-label="Text color hex"></span></label>
-          <label>Background<span class="pick"><input type="color" id="anc1"><input type="text" id="anc1t" aria-label="Background color hex"></span></label>
+          <label>Your text color<span class="pick"><input type="color" id="anc0"><input type="text" id="anc0t" aria-label="Text color hex" spellcheck="false"></span></label>
+          <label>Your background<span class="pick"><input type="color" id="anc1"><input type="text" id="anc1t" aria-label="Background color hex" spellcheck="false"></span></label>
         </div>
         <div class="status" id="status"></div>
+        <div class="row">
+          <button type="button" class="btn" id="fitRange">Pull nodes into range</button>
+        </div>
+        <p class="hint">Range: images are exact while every node sits between the black and white nodes, channel by channel. Pulling clamps the others to that range.</p>
       </section>
 
-      <section class="ctl" id="mapsCtl">
-        <h4>What the map does</h4>
+      <section class="box">
+        <h4>Map preview <span>hue across, light to dark down</span></h4>
         <div class="maps">
-          <figure><figcaption>Input</figcaption><canvas id="mapIn" width="240" height="26"></canvas></figure>
-          <figure><figcaption>Images, video</figcaption><canvas id="mapImg" width="240" height="26"></canvas></figure>
-          <figure><figcaption>Text, UI</figcaption><canvas id="mapTxt" width="240" height="26"></canvas></figure>
+          <span>Input</span><canvas id="mapIn" width="240" height="22"></canvas>
+          <span>Images</span><canvas id="mapImg" width="240" height="22"></canvas>
+          <span>Page</span><canvas id="mapTxt" width="240" height="22"></canvas>
         </div>
       </section>
 
-      <section class="ctl">
+      <section class="box">
         <h4>Cursor</h4>
-        <label class="slider">Size<output id="sizeOut"></output><input type="range" id="size" min="12" max="200" step="1"></label>
-        <label class="slider">Over links and buttons<output id="growOut"></output><input type="range" id="grow" min="12" max="320" step="1"></label>
+        <div class="seg" role="group" aria-label="Cursor shape">
+          <button type="button" id="shapeCircle" aria-pressed="true">Circle</button>
+          <button type="button" id="shapeText" aria-pressed="false">Text</button>
+          <button type="button" id="shapeImage" aria-pressed="false">Image</button>
+        </div>
+        <div id="circleOpts" class="box" style="border:0;padding:0">
+          <label class="slider">Size<output id="sizeOut"></output><input type="range" id="size" min="12" max="240" step="1"></label>
+          <label class="slider">Over links and buttons<output id="growOut"></output><input type="range" id="grow" min="12" max="320" step="1"></label>
+          <label class="slider">Edge softness<output id="edgeOut"></output><input type="range" id="edge" min="0.75" max="40" step="0.25"></label>
+        </div>
+        <div id="textOpts" class="box" style="border:0;padding:0" hidden>
+          <label>Word<input type="text" class="plain" id="word" maxlength="40" spellcheck="false"></label>
+          <label class="slider">Font size<output id="fontOut"></output><input type="range" id="fontSize" min="24" max="260" step="1"></label>
+        </div>
+        <div id="imageOpts" class="box" style="border:0;padding:0" hidden>
+          <p class="hint">The picture is differenced with whatever is under it, then colored by your black and white nodes. A white picture acts like the circle; black leaves the page alone.</p>
+          <div class="row">
+            <label class="btn" for="ownCursor">Use your own image</label>
+            <input type="file" id="ownCursor" accept="image/*" class="visually-hidden">
+            <button type="button" class="btn" id="resetCursor">Back to the painting</button>
+          </div>
+          <label class="slider">Width<output id="imgWOut"></output><input type="range" id="imgW" min="60" max="600" step="1"></label>
+          <p class="credit" id="credit">J. M. W. Turner, The Fighting Temeraire, 1839. Public domain.</p>
+        </div>
         <label class="slider">Follow smoothing<output id="easeOut"></output><input type="range" id="ease" min="0.05" max="1" step="0.01"></label>
+        <div class="row">
+          <label class="btn" for="ownImage">Replace the photo</label>
+          <input type="file" id="ownImage" accept="image/*" class="visually-hidden">
+        </div>
       </section>
 
-      <section class="ctl">
-        <h4><span>Config</span><span id="cfgName">diffmap.config.json</span></h4>
+      <section class="box">
+        <h4>Config <span id="cfgName">diffmap.config.json</span></h4>
         <pre class="cfg" id="cfg"></pre>
-        <div class="actions">
-          <button class="btn" id="save" type="button" hidden>Save to project</button>
-          <button class="btn ghost" id="copy" type="button">Copy config</button>
+        <div class="row">
+          <button class="btn solid" id="save" type="button" hidden>Save to project</button>
+          <button class="btn" id="copy" type="button">Copy config</button>
           <span class="toast" id="toast" role="status"></span>
         </div>
       </section>
@@ -243,59 +253,70 @@
 </div>
 
 <script type="module">
-  import { diffmap, resolvePalette, lookup, applyFallback, coverage, CORNERS, CORNER_RGB, invertNodes, toHex, parseColor, PRESETS as PRESET_MAPS, fitToRange } from './src/index.js';
+  import {
+    diffmap, resolvePalette, lookup, applyFallback, coverage, CORNER_RGB, invertNodes,
+    toHex, parseColor, PRESETS, fitToRange,
+  } from './src/index.js';
 
   const $ = (id) => document.getElementById(id);
-  const PRESETS = Object.fromEntries(Object.entries(PRESET_MAPS).map(([k, v]) => [k[0].toUpperCase() + k.slice(1), v]));
   const ORDER = ['black', 'white', 'red', 'cyan', 'green', 'magenta', 'blue', 'yellow'];
-  const DEFAULT = { mode: 'difference', nodes: { ...PRESETS.Classic }, anchors: ['#111111', '#ffffff'], stops: ['#1a1aff', '#ff5a36'], size: 36, grow: 96, ease: 0.2 };
-
-  let state = load() ?? structuredClone(DEFAULT);
-  let cli = null;      // { path } when served by `npx diffmap setup`
+  const PAINTING = 'temeraire.jpg';
+  const DEFAULT = {
+    mode: 'difference', nodes: { ...PRESETS.classic }, anchors: ['#111111', '#ffffff'], stops: ['#1a1aff', '#ff5a36'],
+    shape: 'circle', size: 40, grow: 110, edge: 1.25, word: 'diffmap', fontSize: 120, imgW: 260, ease: 0.2,
+  };
+  const STORE = 'diffmap-playground-v2';
+  let state = { ...structuredClone(DEFAULT), ...(load() ?? {}) };
+  let cursorImage = { src: PAINTING, name: PAINTING, own: false };
   let cursor = null;
 
-  function load() { try { return JSON.parse(localStorage.getItem('diffmap-playground')); } catch { return null; } }
-  function persist() { try { localStorage.setItem('diffmap-playground', JSON.stringify(state)); } catch {} }
+  function load() { try { return JSON.parse(localStorage.getItem(STORE)); } catch { return null; } }
+  function persist() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch {} }
 
   // ---------------------------------------------------------------- config
-  function palette() {
-    return state.mode === 'duotone'
-      ? { mode: 'duotone', stops: [...state.stops] }
-      : { mode: 'difference', nodes: { ...state.nodes }, anchors: [...state.anchors] };
+  const palette = () => state.mode === 'duotone'
+    ? { mode: 'duotone', stops: [...state.stops] }
+    : { mode: 'difference', nodes: { ...state.nodes }, anchors: [...state.anchors] };
+
+  function cursorConfig(forFile) {
+    if (state.shape === 'text') return { text: state.word || 'diffmap', font: `700 ${state.fontSize}px Arial, Helvetica, sans-serif` };
+    if (state.shape === 'image') return { image: forFile ? cursorImage.name : cursorImage.src, width: state.imgW };
+    return null;
   }
-  function config() {
-    return { palette: palette(), size: state.size, grow: { size: state.grow }, ease: state.ease };
+  function config(forFile = true) {
+    const c = { palette: palette() };
+    const cur = cursorConfig(forFile);
+    if (cur) c.cursor = cur;
+    else Object.assign(c, { size: state.size, grow: { size: state.grow }, edge: state.edge });
+    c.ease = state.ease;
+    return c;
   }
 
   // ---------------------------------------------------------------- cursor
-  let rebuild = 0;
+  let timer = 0;
   function restart() {
     cursor?.destroy();
-    cursor = diffmap({ ...config(), media: 'img[data-diffmap]' });
+    cursor = diffmap({ ...config(false), media: 'img[data-diffmap]' });
   }
   function applyPalette() {
-    clearTimeout(rebuild);
-    rebuild = setTimeout(() => { if (cursor?.enabled) cursor.setPalette(palette()); else restart(); }, 40);
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (cursor?.enabled) cursor.setPalette(palette()); else restart(); }, 40);
   }
+  function restartSoon() { clearTimeout(timer); timer = setTimeout(restart, 60); }
 
-  // ---------------------------------------------------------------- UI build
-  function swatchDots(nodes) {
-    return ['red', 'green', 'blue', 'black'].map((k) => `<i style="background:${nodes[k]}"></i>`).join('');
-  }
+  // ---------------------------------------------------------------- build controls
   for (const [name, nodes] of Object.entries(PRESETS)) {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'chip-btn';
-    b.innerHTML = `<span class="dots">${swatchDots(nodes)}</span>${name}`;
+    b.type = 'button'; b.className = 'btn';
+    b.textContent = name[0].toUpperCase() + name.slice(1);
     b.addEventListener('click', () => { state.nodes = { ...nodes }; render(); applyPalette(); });
     $('presets').append(b);
   }
-
   for (const k of ORDER) {
-    const row = document.createElement('div');
-    row.className = 'node';
-    row.innerHTML = `<span class="node-name">${k}</span><span class="in" style="background:${toHex(CORNER_RGB[k])}"></span><span class="arrow">→</span>
-      <span class="pick"><input type="color" id="n-${k}" aria-label="${k} becomes"><input type="text" id="n-${k}-t" aria-label="${k} hex" spellcheck="false"></span>`;
-    $('nodes').append(row);
+    $('nodes').insertAdjacentHTML('beforeend',
+      `<span>${k[0].toUpperCase() + k.slice(1)}</span><span class="chip" style="background:${toHex(CORNER_RGB[k])}"></span><span class="arrow">→</span>
+       <span class="pick"><input type="color" id="n-${k}" aria-label="${k} becomes"><input type="text" id="n-${k}t" aria-label="${k} hex" spellcheck="false"></span>
+       <span>→</span><span class="chip" id="p-${k}" title="What plain page colors get"></span>`);
     bindColor(`n-${k}`, () => state.nodes[k], (v) => { state.nodes[k] = v; });
   }
   bindColor('anc0', () => state.anchors[0], (v) => { state.anchors[0] = v; });
@@ -304,32 +325,40 @@
   bindColor('stop1', () => state.stops[1], (v) => { state.stops[1] = v; });
 
   function bindColor(id, get, set) {
-    const c = $(id), t = $(id + 't') ?? $(id + '-t');
+    const c = $(id), t = $(id + 't');
     c.addEventListener('input', () => { set(c.value); t.value = c.value; changed(); });
     t.addEventListener('change', () => {
-      try { const hex = toHex(parseColor(t.value)); set(hex); c.value = hex; t.value = hex; changed(); }
+      try { const hex = toHex(parseColor(t.value)); set(hex); c.value = t.value = hex; changed(); }
       catch { t.value = get(); }
     });
   }
+  function changed() { persist(); renderStatus(); renderMaps(); renderConfig(); applyPalette(); }
 
-  for (const [id, key, fmt] of [['size', 'size', (v) => `${v}px`], ['grow', 'grow', (v) => `${v}px`], ['ease', 'ease', (v) => (v >= 1 ? 'off' : v.toFixed(2))]]) {
-    $(id).addEventListener('input', () => { state[key] = Number($(id).value); $(id + 'Out').textContent = fmt(state[key]); persist(); renderConfig(); });
-    $(id).addEventListener('change', restart);
+  const SLIDERS = [
+    ['size', (v) => `${v}px`, restartSoon], ['grow', (v) => `${v}px`, restartSoon], ['edge', (v) => `${v}px`, restartSoon],
+    ['fontSize', (v) => `${v}px`, restartSoon], ['imgW', (v) => `${v}px`, restartSoon],
+    ['ease', (v) => (v >= 1 ? 'off' : v.toFixed(2)), restartSoon],
+  ];
+  const outFor = { size: 'sizeOut', grow: 'growOut', edge: 'edgeOut', fontSize: 'fontOut', imgW: 'imgWOut', ease: 'easeOut' };
+  for (const [id, fmt, after] of SLIDERS) {
+    $(id).addEventListener('input', () => { state[id] = Number($(id).value); $(outFor[id]).textContent = fmt(state[id]); persist(); renderConfig(); after(); });
   }
+  $('word').addEventListener('input', () => { state.word = $('word').value; persist(); renderConfig(); restartSoon(); });
 
   $('modeDiff').addEventListener('click', () => { state.mode = 'difference'; render(); applyPalette(); });
   $('modeDuo').addEventListener('click', () => { state.mode = 'duotone'; render(); applyPalette(); });
+  for (const [id, shape] of [['shapeCircle', 'circle'], ['shapeText', 'text'], ['shapeImage', 'image']]) {
+    $(id).addEventListener('click', () => { state.shape = shape; render(); restart(); });
+  }
+  $('fitRange').addEventListener('click', () => { state.nodes = fitToRange(state.nodes); render(); applyPalette(); });
 
-  function changed() { persist(); renderStatus(); renderMaps(); renderConfig(); applyPalette(); }
-
-  // sample strip: the 8 corner colors
-  for (const k of ORDER) {
-    const d = document.createElement('div');
-    const c = CORNER_RGB[k];
-    d.style.background = toHex(c);
-    d.style.color = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11 > 0.5 ? '#111' : '#fff';
-    d.textContent = k;
-    $('strip').append(d);
+  // page-color strip and its image twin
+  for (const k of ORDER) { const d = document.createElement('div'); d.style.background = toHex(CORNER_RGB[k]); $('strip').append(d); }
+  {
+    const c = document.createElement('canvas'); c.width = 800; c.height = 80;
+    const x = c.getContext('2d');
+    ORDER.forEach((k, i) => { x.fillStyle = toHex(CORNER_RGB[k]); x.fillRect(i * 100, 0, 100, 80); });
+    $('stripImg').src = c.toDataURL();
   }
 
   // ---------------------------------------------------------------- render
@@ -338,17 +367,22 @@
     $('modeDiff').setAttribute('aria-pressed', String(!duo));
     $('modeDuo').setAttribute('aria-pressed', String(duo));
     $('modeHint').textContent = duo
-      ? 'Everything becomes a two-color ramp: brightness picks a point between your dark and light stop. Works the same in every browser.'
-      : 'Each color turns into its opposite, and you choose what every opposite looks like.';
-    $('nodesCtl').hidden = duo; $('anchorCtl').hidden = duo; $('duoCtl').hidden = !duo;
-    for (const k of ORDER) { $(`n-${k}`).value = state.nodes[k]; $(`n-${k}-t`).value = state.nodes[k]; }
+      ? 'Brightness picks a point between your dark and light stop. Exact everywhere, on every kind of content.'
+      : 'Every color turns into its opposite, and you pick what each opposite looks like.';
+    $('nodesBox').hidden = duo; $('checkBox').hidden = duo; $('duoBox').hidden = !duo;
+    for (const k of ORDER) { $(`n-${k}`).value = $(`n-${k}t`).value = state.nodes[k]; }
     $('anc0').value = $('anc0t').value = state.anchors[0];
     $('anc1').value = $('anc1t').value = state.anchors[1];
     $('stop0').value = $('stop0t').value = state.stops[0];
     $('stop1').value = $('stop1t').value = state.stops[1];
-    $('size').value = state.size; $('sizeOut').textContent = `${state.size}px`;
-    $('grow').value = state.grow; $('growOut').textContent = `${state.grow}px`;
-    $('ease').value = state.ease; $('easeOut').textContent = state.ease >= 1 ? 'off' : state.ease.toFixed(2);
+    for (const [id, fmt] of SLIDERS) { $(id).value = state[id]; $(outFor[id]).textContent = fmt(state[id]); }
+    $('word').value = state.word;
+    for (const [id, shape] of [['shapeCircle', 'circle'], ['shapeText', 'text'], ['shapeImage', 'image']]) $(id).setAttribute('aria-pressed', String(state.shape === shape));
+    $('circleOpts').hidden = state.shape !== 'circle';
+    $('textOpts').hidden = state.shape !== 'text';
+    $('imageOpts').hidden = state.shape !== 'image';
+    $('stageMode').textContent = { circle: 'Circle cursor', text: 'Text cursor', image: 'Image cursor' }[state.shape];
+    $('credit').hidden = cursorImage.own;
     persist(); renderStatus(); renderMaps(); renderConfig();
   }
 
@@ -356,36 +390,44 @@
     if (state.mode === 'duotone') return;
     const r = resolvePalette(palette());
     const fb = r.fallback;
-    const out = [];
-    const anchorOk = fb.exact.every(Boolean);
-    out.push(anchorOk
-      ? ['ok', 'Text and background land exactly on your map.']
-      : ['warn', `Text or background is off by up to ${Math.round(maxAnchorError(r) * 255)} levels. Move the matching nodes closer to a straight line, or pick less extreme site colors.`]);
+    // what plain page colors become, per node
+    for (const k of ORDER) $(`p-${k}`).style.background = toHex(applyFallback(fb, CORNER_RGB[k]));
+
+    const lines = [];
+    const off = state.anchors.map((a) => {
+      const c = parseColor(a), want = lookup(r.nodes, c), got = applyFallback(fb, c);
+      return Math.round(Math.max(...want.map((v, j) => Math.abs(v - got[j]))) * 255);
+    });
+    const worst = Math.max(...off);
+    lines.push(worst <= 2
+      ? ['ok', 'Your text and background land exactly on the map.']
+      : worst <= 16
+        ? ['ok', `Your text and background land within ${worst} levels of the map, too little to see.`]
+        : ['warn', `Your text or background is off by up to ${worst} levels: the nodes around them don't lie on one straight line per channel.`]);
+
+    const fitted = fitToRange(state.nodes);
+    const outside = ORDER.filter((k) => toHex(parseColor(state.nodes[k])) !== fitted[k]);
+    const inRange = outside.length === 0;
     const cov = Math.round(coverage(fb, r.nodes) * 255);
-    out.push(cov <= 1
-      ? ['ok', 'Images and video show the full map exactly.']
-      : cov <= 12
-        ? ['ok', `Images and video match the map within ${cov} levels, too little to see.`]
-        : ['warn', `Images are off by up to ${cov} levels: some nodes are brighter or darker than your black and white nodes allow. <button type="button" class="chip-btn" id="fitRange">Pull nodes into range</button>`]);
-    const err = Math.round(fb.error * 255);
-    out.push(err <= 2
-      ? ['ok', 'All other page colors match the map exactly.']
-      : ['ok', `Other page colors follow the map within ${err} levels; the closer your nodes are to a straight line per channel, the closer they get.`]);
-    $('status').innerHTML = out.map(([s, t]) => `<p class="pill" data-state="${s}"><span>${t}</span></p>`).join('');
-    $('fitRange')?.addEventListener('click', () => { state.nodes = fitToRange(state.nodes); render(); applyPalette(); });
-  }
-  function maxAnchorError(r) {
-    return Math.max(...r.fallback.exact.map((_, i) => {
-      const a = parseColor(state.anchors[i]);
-      const want = lookup(r.nodes, a), got = applyFallback(r.fallback, a);
-      return Math.max(...want.map((v, j) => Math.abs(v - got[j])));
-    }));
+    lines.push(inRange
+      ? ['ok', cov <= 1 ? 'Range: every node is inside, images are exact.' : `Range: every node is inside, images are within ${cov} levels (your site colors narrow the range a little).`]
+      : ['warn', `Range: ${outside.join(', ')} ${outside.length === 1 ? 'is' : 'are'} outside, images are off by up to ${cov} levels there.`]);
+    $('fitRange').disabled = inRange;
+    $('fitRange').textContent = inRange ? 'All nodes in range' : 'Pull nodes into range';
+
+    const missed = ORDER.filter((k) => {
+      const got = applyFallback(fb, CORNER_RGB[k]), want = r.nodes[k];
+      return Math.max(...got.map((v, i) => Math.abs(v - want[i]))) * 255 > 24;
+    });
+    lines.push(!missed.length
+      ? ['ok', 'Page colors follow every node.']
+      : ['warn', `On plain page colors, ${missed.join(', ')} can't take your color; see the Page column and the two strips on the left. Images and video always do.`]);
+    $('status').innerHTML = lines.map(([s, t]) => `<p data-state="${s}"><span>${t}</span></p>`).join('');
   }
 
-  // Input strip: hue across, lightness down. Then the same pixels through each engine.
   function renderMaps() {
     const r = resolvePalette(palette());
-    const W = 240, H = 26;
+    const W = 240, H = 22;
     const draw = (id, fn) => {
       const ctx = $(id).getContext('2d');
       const im = ctx.createImageData(W, H);
@@ -406,39 +448,40 @@
     const k = (n) => (n + h * 12) % 12, a = s * Math.min(l, 1 - l);
     return [0, 8, 4].map((n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)));
   }
-
   function renderConfig() { $('cfg').textContent = JSON.stringify(config(), null, 2); }
 
-  // ---------------------------------------------------------------- own image
-  const fig = $('photoFig');
-  function useFile(file) {
-    if (!file || !file.type.startsWith('image/')) return;
-    $('photo').src = URL.createObjectURL(file);
+  // ---------------------------------------------------------------- files
+  $('ownImage').addEventListener('change', (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    $('photo').src = URL.createObjectURL(f);
     $('photo').addEventListener('load', restart, { once: true });
-  }
-  $('ownImage').addEventListener('change', (e) => useFile(e.target.files[0]));
-  fig.addEventListener('dragover', (e) => { e.preventDefault(); fig.classList.add('dragging'); });
-  fig.addEventListener('dragleave', () => fig.classList.remove('dragging'));
-  fig.addEventListener('drop', (e) => { e.preventDefault(); fig.classList.remove('dragging'); useFile(e.dataTransfer.files[0]); });
+  });
+  $('ownCursor').addEventListener('change', (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    cursorImage = { src: URL.createObjectURL(f), name: f.name, own: true };
+    state.shape = 'image'; render(); restart();
+  });
+  $('resetCursor').addEventListener('click', () => { cursorImage = { src: PAINTING, name: PAINTING, own: false }; render(); restart(); });
 
   // ---------------------------------------------------------------- copy / save
-  function toast(msg) { $('toast').textContent = msg; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').textContent = ''), 4000); }
+  function toast(msg) { $('toast').textContent = msg; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').textContent = ''), 5000); }
   $('copy').addEventListener('click', async () => {
     const text = JSON.stringify(config(), null, 2);
     try { await navigator.clipboard.writeText(text); toast('Copied'); }
     catch {
-      const sel = getSelection(); const range = document.createRange();
+      const sel = getSelection(), range = document.createRange();
       range.selectNodeContents($('cfg')); sel.removeAllRanges(); sel.addRange(range);
-      toast('Selected — press Ctrl/Cmd+C');
+      toast('Selected. Press Ctrl+C or Cmd+C.');
     }
   });
   $('save').addEventListener('click', async () => {
     $('save').disabled = true;
     try {
-      const r = await fetch('api/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(config()) });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || r.statusText);
-      toast(`Saved to ${j.path}. You can close this tab.`);
+      const res = await fetch('api/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(config()) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || res.statusText);
+      const extra = state.shape === 'image' ? ` Put ${cursorImage.name} where your site can load it.` : '';
+      toast(`Saved to ${j.path}.${extra} You can close this tab.`);
     } catch (e) { toast(`Couldn't save: ${e.message}. Is the setup command still running?`); }
     $('save').disabled = false;
   });
@@ -446,15 +489,14 @@
   // ---------------------------------------------------------------- boot
   async function detectCli() {
     try {
-      const r = await fetch('api/config', { cache: 'no-store' });
-      if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return;
-      const j = await r.json();
+      const res = await fetch('api/config', { cache: 'no-store' });
+      if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return;
+      const j = await res.json();
       if (!j.diffmap) return;
-      cli = j;
       document.title = 'diffmap Setup';
-      $('where').textContent = `Setup · saves to ${j.display ?? j.path}`;
+      $('where').textContent = `Setup, saves to ${j.display ?? j.path}`;
       $('where').dataset.live = 'true';
-      $('cfgName').textContent = j.path.split(/[\\/]/).pop();
+      $('cfgName').textContent = (j.display ?? j.path).split(/[\\/]/).pop();
       $('save').hidden = false;
       if (j.config) fromConfig(j.config);
     } catch {}
@@ -462,13 +504,16 @@
   function fromConfig(c) {
     const p = c.palette ?? {};
     state.mode = p.mode === 'duotone' ? 'duotone' : 'difference';
-    state.nodes = { ...invertNodes(), ...(p.nodes ?? {}) };
-    for (const k of ORDER) state.nodes[k] = toHex(parseColor(state.nodes[k]));
+    state.nodes = Object.fromEntries(ORDER.map((k) => [k, toHex(parseColor(p.nodes?.[k] ?? invertNodes()[k]))]));
     if (p.anchors?.length === 2) state.anchors = p.anchors.map((x) => toHex(parseColor(x)));
     if (p.stops?.length === 2) state.stops = p.stops.map((x) => toHex(parseColor(x)));
     if (c.size) state.size = c.size;
     if (c.grow?.size) state.grow = c.grow.size;
+    if (c.edge) state.edge = c.edge;
     if (c.ease) state.ease = c.ease;
+    if (c.cursor?.text) { state.shape = 'text'; state.word = c.cursor.text; state.fontSize = Number(c.cursor.font?.match(/(\d+)px/)?.[1] ?? state.fontSize); }
+    else if (c.cursor?.image) { state.shape = 'image'; state.imgW = c.cursor.width ?? state.imgW; }
+    else state.shape = 'circle';
   }
 
   await detectCli();

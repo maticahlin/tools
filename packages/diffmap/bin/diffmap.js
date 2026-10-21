@@ -13,7 +13,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  PRESETS, CORNERS, parseColor, toHex, resolvePalette, coverage, lookup, applyFallback,
+  PRESETS, CORNERS, CORNER_RGB, parseColor, toHex, resolvePalette, coverage, lookup, applyFallback,
 } from '../src/core.js';
 
 const PKG = path.resolve(fileURLToPath(import.meta.url), '../..');
@@ -52,7 +52,12 @@ Palette flags (any of these skips the browser)
   --nodes '<json>'                  e.g. '{"red":"#ffd400","white":"#141414"}'  (unset nodes stay inverted)
   --anchors "<text>,<background>"   your site's main text and background colors (land exactly)
   --duotone "<dark>,<light>"        two-color ramp instead of the node map
-  --size <px> --grow <px> --ease <0.05-1>
+  --size <px> --grow <px> --edge <px> --ease <0.05-1>
+
+Cursor shape (default: circle)
+  --text "<word>" [--font "<css font>"]   the word itself is the cursor
+  --image <url> [--width <px>]            a picture, differenced with the page
+  --circle                                back to the circle
 
 Other
   --out <file>                      config path (default: ./diffmap.config.json)
@@ -62,7 +67,7 @@ Other
   },
 
   async setup() {
-    const direct = ['preset', 'nodes', 'anchors', 'duotone'].some((k) => k in flags);
+    const direct = ['preset', 'nodes', 'anchors', 'duotone', 'text', 'image', 'circle'].some((k) => k in flags);
     if (direct) {
       const cfg = buildConfig(readConfig() ?? {});
       writeConfig(cfg);
@@ -136,6 +141,10 @@ function buildConfig(base) {
     delete pal.stops;
   } else { delete pal.nodes; delete pal.anchors; }
   cfg.palette = pal;
+  if (flags.text) cfg.cursor = { text: String(flags.text), font: flags.font ?? '700 120px Arial, Helvetica, sans-serif' };
+  if (flags.image) cfg.cursor = { image: String(flags.image), width: Number(flags.width ?? 260) };
+  if (flags.circle) delete cfg.cursor;
+  if (flags.edge) cfg.edge = Number(flags.edge);
   if (flags.size) cfg.size = Number(flags.size);
   if (flags.grow) cfg.grow = { ...(cfg.grow ?? {}), size: Number(flags.grow) };
   if (flags.ease) cfg.ease = Math.min(1, Math.max(0.05, Number(flags.ease)));
@@ -156,6 +165,10 @@ function analyse(cfg) {
     anchors,
     imagesOffBy: lv(coverage(r.fallback, r.nodes)),
     otherColorsOffBy: lv(r.fallback.error),
+    pageMisses: CORNERS.filter((k) => {
+      const got = applyFallback(r.fallback, CORNER_RGB[k]);
+      return lv(Math.max(...got.map((v, i) => Math.abs(v - r.nodes[k][i])))) > 24;
+    }),
     fallback: { black: toHex(r.fallback.A), white: toHex(r.fallback.B) },
     layers: r.layers.length,
   };
@@ -169,7 +182,7 @@ function report(cfg, { saved }) {
   if (a.mode === 'duotone') { console.log('  duotone: exact in every browser, on text, images and video.'); return; }
   for (const an of a.anchors) console.log(`  site color ${an.color}: ${an.offBy <= 1 ? 'exact' : `off by ${an.offBy} levels`}`);
   console.log(`  images and video: ${a.imagesOffBy <= 1 ? 'exact' : a.imagesOffBy <= 12 ? `within ${a.imagesOffBy} levels (not visible)` : `off by up to ${a.imagesOffBy} levels (nodes outside the black/white range)`}`);
-  console.log(`  other page colors: ${a.otherColorsOffBy <= 2 ? 'exact' : `within ${a.otherColorsOffBy} levels of the map`}`);
+  console.log(`  plain page colors: ${a.pageMisses.length ? `${a.pageMisses.join(', ')} can't take their node color there (images and video still do)` : 'follow every node'}`);
 }
 
 // ------------------------------------------------------------------ editor server
@@ -203,7 +216,7 @@ function editor() {
         return;
       }
       if (url.pathname === '/' || url.pathname === '/index.html') return send(res, 200, TYPES['.html'], html);
-      const map = { '/src/index.js': 'src/index.js', '/src/core.js': 'src/core.js', '/dusk.jpg': 'setup/dusk.jpg' };
+      const map = { '/src/index.js': 'src/index.js', '/src/core.js': 'src/core.js', '/dusk.jpg': 'setup/dusk.jpg', '/temeraire.jpg': 'setup/temeraire.jpg' };
       const f = map[url.pathname];
       if (f) return send(res, 200, TYPES[path.extname(f)], fs.readFileSync(path.join(PKG, f)));
       res.writeHead(404).end('not found');

@@ -106,3 +106,37 @@ test('resolvePalette end to end', () => {
   const d = resolvePalette({ mode: 'duotone', stops: ['#1a1aff', '#ff5a36'] });
   assert.equal(d.layers[0].blend, 'color');
 });
+
+import { layersAt, rampBreaks } from '../src/core.js';
+
+test('soft edge: layers at strength t compute c + t·(F(c) − c)', () => {
+  for (let k = 0; k < 300; k++) {
+    const fb = { A: q(rcolor()), B: q(rcolor()) };
+    const t = rand();
+    const [m, X, M] = layersAt(fb, t);
+    const stack = [{ blend: 'multiply', color: m }, { blend: 'difference', color: X }, { blend: 'difference', color: M }];
+    const c = rcolor();
+    const F = applyFallback(fb, c);
+    const want = c.map((v, i) => v + t * (F[i] - v));
+    stack.reduce((b, { blend, color }) => BLEND[blend](b, color), c)
+      .forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-9));
+  }
+});
+
+test('soft edge: at t = 0 the layers are an exact no-op (white, white, white)', () => {
+  const [m, X, M] = layersAt({ A: [0.3, 0.9, 0.1], B: [0.8, 0.2, 0.5] }, 0);
+  assert.deepEqual([m, X, M], [[1, 1, 1], [1, 1, 1], [1, 1, 1]]);
+});
+
+test('soft edge: layer colors are linear in t between breaks, so CSS gradients are exact', () => {
+  for (let k = 0; k < 200; k++) {
+    const fb = { A: q(rcolor()), B: q(rcolor()) };
+    const pts = [1, ...rampBreaks(fb), 0];
+    for (let j = 0; j < pts.length - 1; j++) {
+      const hi = pts[j] - 1e-7, lo = pts[j + 1] + 1e-7;
+      const a = layersAt(fb, hi), b = layersAt(fb, lo);
+      const mid = (hi + lo) / 2, c = layersAt(fb, mid);
+      c.forEach((col, L) => col.forEach((v, i) => assert.ok(Math.abs(v - (a[L][i] + b[L][i]) / 2) < 1e-6)));
+    }
+  }
+});

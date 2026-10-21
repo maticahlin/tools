@@ -40,6 +40,8 @@ Browsers can't hand JavaScript the pixels of a rendered page, so diffmap uses tw
 
 **2. Node map — images and video.** For each `[data-diffmap]` image, diffmap reads the pixels once, runs them through your full 8-node color cube, and keeps the result as a hidden copy that only shows inside the cursor. That copy is pre-corrected for the blend layers that still sit on top, so after both engines the image comes out exactly as your map says, and text on top of it still matches the rest of your text. Video is recolored per frame with WebGL, only while the cursor is over it.
 
+**Clean edges.** Blend layers don't compose linearly, so a rim pixel that every layer covers halfway comes out as a colored fringe. diffmap never half-covers: the layers are opaque squares on whole device pixels, and a gradient fades the *strength* of the effect to zero over the last `edge` pixels of the circle. Strength-faded maps are still per-channel affine, so the same three layers render them exactly, and at zero strength the layers are an exact no-op. The text cursor does the same per pixel, using the glyphs' anti-aliasing as the strength.
+
 ```
 page pixels ──► blend layers (fitted to your map) ──────────────► text, UI, backgrounds
 image pixels ─► node map ─► pre-correct ─► blend layers ─────────► exactly your map
@@ -65,9 +67,19 @@ image pixels ─► node map ─► pre-correct ─► blend layers ────
   "ease": 0.2,                          // follow smoothing, 1 = no lag
   "media": "img[data-diffmap], video[data-diffmap]",  // or true for all images and video
   "hideCursor": false,
-  "position": "auto"                    // "fixed" | "absolute" | "auto"
+  "position": "auto",                   // "fixed" | "absolute" | "auto"
+  "edge": 1.25,                         // circle: px over which the effect fades out; larger = feathered
+  "cursor": null                        // circle by default, or one of:
+  // { "text": "hello", "font": "700 120px Arial" }    the word is the cursor
+  // { "image": "/painting.jpg", "width": 260 }        a picture, differenced with the page
 }
 ```
+
+### Cursor shapes
+
+- **Circle** (default). Grows over links and buttons.
+- **Text.** The word itself is the cursor; the inside of every glyph gets the effect, with clean anti-aliased edges.
+- **Image.** A real difference between the picture and the page, `|page − picture|`, then colored by your palette with black and white swapped. A white picture behaves exactly like the circle; black parts leave the page alone. Images marked `data-diffmap` get the blend layers here, not the node map, since the result depends on the moving picture.
 
 | Attribute | Effect |
 | --- | --- |
@@ -98,6 +110,7 @@ diffmap setup                      editor on localhost; "Save to project" writes
 diffmap setup --preset riso --anchors "#111,#fff"
 diffmap setup --nodes '{"red":"#ffd400"}'      unset nodes keep their current value
 diffmap setup --duotone "#1a1aff,#ff5a36"
+diffmap setup --text "hello"                   cursor shapes: --text, --image <url> --width <px>, --circle
 diffmap check [--json]             how exact the saved palette renders
 diffmap vendor <dir>               copy the runtime for sites without a bundler
 diffmap add-command                add /diffmap-setup to Claude Code (.claude/commands)
@@ -133,7 +146,11 @@ npm test                           # color math
 node test/pixel.mjs chromium webkit firefox   # screenshots vs. the math, per pixel
 ```
 
-The pixel test renders a page with text, color swatches, a photo, text over the photo and a dark section, moves the cursor over each, and checks every pixel inside the circle against the formula. Current results: maximum error 1.8/255 in Chromium and WebKit.
+The pixel test renders a page with text, color swatches, a photo, text over the photo and a dark section, moves the cursor over each, and checks every pixel inside the circle against the formula. It also checks the circle's rim and the text cursor's glyph edges for fringes (every rim pixel must lie between the untouched page and the full effect), and the image cursor against `|page − picture|` per pixel. Current results: worst error 2.5/255 inside, 1.7/255 on rims, in Chromium and WebKit; no change outside the circle at device pixel ratios 1, 1.25, 1.5 and 2.
+
+## Credits
+
+The setup page's image cursor uses J. M. W. Turner's *The Fighting Temeraire* (1839), public domain, from the [aquarelle](https://www.npmjs.com/package/aquarelle) package.
 
 ## License
 

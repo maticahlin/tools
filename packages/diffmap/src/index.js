@@ -2,7 +2,7 @@
 // Zero dependencies. ~3 KB min+gz. See README.md for the full guide.
 
 import {
-  resolvePalette, lookup, precorrect, toHex, parseColor,
+  resolvePalette, lookup, precorrect, layersAt, rampBreaks,
 } from './core.js';
 
 export * from './core.js';
@@ -14,6 +14,8 @@ const DEFAULTS = {
   media: 'img[data-diffmap], video[data-diffmap]', // images/video that get the full node map; true = all
   hideCursor: false,        // hide the native cursor while diffmap is active
   position: 'auto',         // 'fixed' | 'absolute' | 'auto' (absolute on Safari/WebKit, fixed elsewhere)
+  edge: 1.25,               // circle: px over which the effect fades out at the rim (anti-aliasing without fringes)
+  cursor: null,             // null = circle, { text, font }, or { image, width }
   zIndex: 2147483000,
   transition: 220,          // ms to tween between palettes
 };
@@ -63,34 +65,31 @@ export function diffmap(options = {}) {
     if (getComputedStyle(box).overflow !== 'clip') box.style.overflow = 'hidden';
     document.documentElement.appendChild(box); // outside <body>, so a positioned body doesn't shift it
   }
-  const BLENDS = ['color', 'multiply', 'difference', 'difference'];
-  const els = BLENDS.map((blend) => {
-    const el = document.createElement('div');
-    el.setAttribute('aria-hidden', 'true');
-    el.dataset.diffmapLayer = blend;
-    Object.assign(el.style, {
-      position: mode, left: '0', top: '0', width: '0', height: '0', margin: '0',
-      borderRadius: '50%', pointerEvents: 'none', mixBlendMode: blend,
-      transform: 'translate(-9999px, -9999px)', zIndex: String(opt.zIndex),
-    });
-    if (mode === 'fixed') el.style.willChange = 'transform';
-    (box ?? document.body).appendChild(el);
-    return el;
-  });
   const syncBox = () => { if (box) { box.style.left = scrollX + 'px'; box.style.top = scrollY + 'px'; } };
   syncBox();
   addEventListener('scroll', syncBox, { passive: true });
 
-  function paintLayers(A, B, duotone) {
-    // same math as core.layers(), but always 4 elements so nothing pops during tweens
-    const D = B.map((b, i) => b - A[i]);
-    els[0].style.display = duotone ? '' : 'none';
-    els[0].style.backgroundColor = '#808080';
-    els[1].style.backgroundColor = toHex(D.map(Math.abs));
-    els[2].style.backgroundColor = toHex(D.map((d, i) => (d > 0 ? 1 - A[i] : A[i])));
-    els[3].style.backgroundColor = toHex(D.map((d) => (d > 0 ? 1 : 0)));
-  }
+  const mkLayer = (blend) => {
+    const el = document.createElement('div');
+    el.setAttribute('aria-hidden', 'true');
+    el.dataset.diffmapLayer = blend;
+    Object.assign(el.style, {
+      position: mode, left: '0', top: '0', width: '0', height: '0', margin: '0', padding: '0',
+      pointerEvents: 'none', mixBlendMode: blend, transform: 'translate(-9999px, -9999px)',
+      zIndex: String(opt.zIndex), backgroundRepeat: 'no-repeat',
+    });
+    if (mode === 'fixed') el.style.willChange = 'transform';
+    (box ?? document.body).appendChild(el);
+    return el;
+  };
+  const move = (el, x, y) => {
+    el.style.transform = mode === 'fixed' ? `translate3d(${x}px, ${y}px, 0)` : `translate(${x}px, ${y}px)`;
+  };
+
+  const shape = createShape(opt.cursor ?? {}, { mkLayer, move, edge: opt.edge });
+  const paintLayers = (A, B, duotone) => shape.paint(A, B, duotone);
   paintLayers(shown.A, shown.B, current.duotone);
+  if (shape.static) opt.transition = 0; // bitmap shapes repaint per palette, so palettes switch instantly
 
   if (opt.hideCursor) document.documentElement.style.cursor = 'none';
 
@@ -145,7 +144,7 @@ export function diffmap(options = {}) {
     const from = { A: [...shown.A], B: [...shown.B] };
     if (next.duotone !== current.duotone || opt.transition <= 0) {
       current = next; shown = { A: [...next.fallback.A], B: [...next.fallback.B] };
-      paintLayers(shown.A, shown.B, next.duotone); tween = null; return;
+      paintLayers(shown.A, shown.B, next.duotone); tween = null; kick(); return;
     }
     current = next;
     tween = { from, start: performance.now() };
@@ -163,11 +162,6 @@ export function diffmap(options = {}) {
     const settled = Math.abs(target.x - pos.x) < 0.1 && Math.abs(target.y - pos.y) < 0.1 && Math.abs(target.size - pos.size) < 0.1;
     if (settled) { pos.x = target.x; pos.y = target.y; pos.size = target.size; }
 
-    const r = pos.size / 2;
-    const t = mode === 'fixed' ? `translate3d(${pos.x - r}px, ${pos.y - r}px, 0)` : `translate(${pos.x - r}px, ${pos.y - r}px)`;
-    const wh = pos.size + 'px';
-    for (const el of els) { el.style.transform = t; if (el.style.width !== wh) { el.style.width = wh; el.style.height = wh; } }
-
     if (tween) {
       const k = Math.min(1, (now - tween.start) / opt.transition);
       const s = k * k * (3 - 2 * k);
@@ -177,7 +171,9 @@ export function diffmap(options = {}) {
       if (k >= 1) tween = null;
     }
 
-    media.update(pos.x, pos.y, r);
+    const reveal = shape.place(pos.x, pos.y, pos.size);
+
+    media.update(reveal);
     if (!settled || tween || media.busy()) kick();
   }
 
@@ -203,12 +199,166 @@ export function diffmap(options = {}) {
       document.removeEventListener('pointerout', onLeave);
       removeEventListener('pointerdown', onDown);
       removeEventListener('pointerup', onUp);
-      els.forEach((el) => el.remove());
+      shape.destroy();
       box?.remove();
       removeEventListener('scroll', syncBox);
       media.destroy();
       if (opt.hideCursor) document.documentElement.style.cursor = '';
     },
+  };
+}
+
+// =====================================================================================
+// Cursor shapes. Each one owns its layer elements and answers three things: how to paint
+// a palette (paint), where to draw this frame (place), and which part of the page the
+// image overlays should reveal (place's return value).
+
+const rgb = (c) => `rgb(${c.map((v) => (v * 255).toFixed(2)).join(', ')})`;
+const dpr = () => window.devicePixelRatio || 1;
+const snap = (v) => Math.round(v * dpr()) / dpr();
+const snapUp = (v) => Math.ceil(v * dpr()) / dpr();
+
+function createShape(cursor, env) {
+  if (cursor.text) return textShape(cursor, env);
+  if (cursor.image) return imageShape(cursor, env);
+  return circleShape(env);
+}
+
+// Circle: three opaque squares on whole device pixels, each painted with a radial
+// gradient that carries the effect strength from 1 inside to 0 at the rim.
+function circleShape({ mkLayer, move, edge = 1.25 }) {
+  const lum = mkLayer('color');            // duotone only: keeps the backdrop's luminance
+  lum.style.borderRadius = '50%';
+  lum.style.backgroundColor = '#808080';
+  const els = [mkLayer('multiply'), mkLayer('difference'), mkLayer('difference')];
+  let fb = null, breaks = [], duo = false, last = '';
+
+  return {
+    paint(A, B, duotone) { fb = { A, B }; breaks = rampBreaks(fb); duo = duotone; lum.style.display = duo ? '' : 'none'; last = ''; },
+    place(x, y, size) {
+      const r = size / 2;
+      if (r < 0.5) { for (const el of [lum, ...els]) move(el, -9999, -9999); return null; }
+      const s = Math.min(edge, r);
+      const side = snapUp(2 * r + 4);
+      const left = snap(x - side / 2), top = snap(y - side / 2);
+      const cx = x - left, cy = y - top;
+      const key = `${side}|${cx.toFixed(3)}|${cy.toFixed(3)}|${r}`;
+      if (key !== last) {
+        last = key;
+        const rad = (t) => `${(r - s * t).toFixed(3)}px`;
+        const stops = [[], [], []];
+        const push = (t, cols) => cols.forEach((c, k) => stops[k].push(`${rgb(c)} ${rad(t)}`));
+        push(1, layersAt(fb, 1));
+        for (const tc of breaks) { push(tc, layersAt(fb, tc + 1e-7)); push(tc, layersAt(fb, tc - 1e-7)); }
+        push(0, layersAt(fb, 0));
+        const at = `circle at ${cx.toFixed(3)}px ${cy.toFixed(3)}px`;
+        els.forEach((el, k) => {
+          el.style.width = el.style.height = side + 'px';
+          el.style.backgroundImage = `radial-gradient(${at}, ${stops[k].join(', ')})`;
+        });
+      }
+      for (const el of els) move(el, left, top);
+      if (duo) { lum.style.width = lum.style.height = 2 * r + 'px'; move(lum, x - r, y - r); }
+      return { kind: 'circle', x, y, r: Math.max(0, r - s) };
+    },
+    destroy() { [lum, ...els].forEach((el) => el.remove()); },
+  };
+}
+
+// Text: the word's anti-aliasing coverage becomes the effect strength t, baked per pixel
+// into three bitmaps at device resolution. Same exactness as the circle, any glyph shape.
+function textShape(cursor, { mkLayer, move }) {
+  const font = cursor.font ?? '900 72px Arial, Helvetica, sans-serif';
+  const text = String(cursor.text);
+  const lum = mkLayer('color');
+  lum.style.backgroundColor = '#808080';
+  const els = [mkLayer('multiply'), mkLayer('difference'), mkLayer('difference')];
+  const k = dpr();
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.font = font;
+  const mt = ctx.measureText(text);
+  const pad = 4;
+  const asc = mt.actualBoundingBoxAscent ?? parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? 72) * 0.8;
+  const desc = mt.actualBoundingBoxDescent ?? asc * 0.25;
+  const w = Math.ceil((mt.width + 2 * pad) * k), h = Math.ceil((asc + desc + 2 * pad) * k);
+  c.width = w; c.height = h;
+  ctx.scale(k, k);
+  ctx.font = font; ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(text, pad, pad + asc);
+  const cov = ctx.getImageData(0, 0, w, h).data;
+  const maskUrl = c.toDataURL();
+  const W = w / k, H = h / k;
+  for (const el of [lum, ...els]) {
+    el.style.width = W + 'px'; el.style.height = H + 'px'; el.style.backgroundSize = '100% 100%';
+  }
+  for (const p of ['maskImage', 'webkitMaskImage']) lum.style[p] = `url("${maskUrl}")`;
+  for (const p of ['maskSize', 'webkitMaskSize']) lum.style[p] = '100% 100%';
+
+  return {
+    static: true,
+    paint(A, B, duotone) {
+      lum.style.display = duotone ? '' : 'none';
+      // the 256 possible coverage values → layer colors, then per pixel
+      const table = Array.from({ length: 256 }, (_, a) => layersAt({ A, B }, a / 255));
+      const out = els.map(() => new ImageData(w, h));
+      for (let i = 0; i < cov.length; i += 4) {
+        const t = table[cov[i + 3]];
+        for (let L = 0; L < 3; L++) {
+          const d = out[L].data, col = t[L];
+          d[i] = col[0] * 255 + 0.5; d[i + 1] = col[1] * 255 + 0.5; d[i + 2] = col[2] * 255 + 0.5; d[i + 3] = 255;
+        }
+      }
+      const tmp = document.createElement('canvas');
+      tmp.width = w; tmp.height = h;
+      const tctx = tmp.getContext('2d');
+      els.forEach((el, L) => { tctx.putImageData(out[L], 0, 0); el.style.backgroundImage = `url("${tmp.toDataURL()}")`; });
+    },
+    place(x, y, size) {
+      if (size < 0.5) { for (const el of [lum, ...els]) move(el, -9999, -9999); return null; }
+      const left = snap(x - W / 2), top = snap(y - H / 2);
+      for (const el of [lum, ...els]) move(el, left, top);
+      return { kind: 'mask', url: maskUrl, left, top, w: W, h: H };
+    },
+    destroy() { [lum, ...els].forEach((el) => el.remove()); },
+  };
+}
+
+// Image: a real difference with the picture, then the palette on top.
+// The palette layers use black and white swapped, so a white picture behaves exactly like
+// the circle and a black one leaves the page as it is.
+function imageShape(cursor, { mkLayer, move }) {
+  const pic = mkLayer('difference');
+  pic.style.backgroundImage = `url("${cursor.image}")`;
+  pic.style.backgroundSize = '100% 100%';
+  const lum = mkLayer('color');
+  lum.style.backgroundColor = '#808080';
+  const els = [mkLayer('multiply'), mkLayer('difference'), mkLayer('difference')];
+  let W = cursor.width ?? 220, H = cursor.height ?? W * 0.75;
+  const img = new Image();
+  img.onload = () => {
+    if (!cursor.height) H = W * img.naturalHeight / img.naturalWidth;
+    size();
+  };
+  img.src = cursor.image;
+  function size() {
+    W = snapUp(W); H = snapUp(H);
+    for (const el of [pic, lum, ...els]) { el.style.width = W + 'px'; el.style.height = H + 'px'; }
+  }
+  size();
+  return {
+    static: true,
+    paint(A, B, duotone) {
+      lum.style.display = duotone ? '' : 'none';
+      layersAt({ A: B, B: A }, 1).forEach((col, k) => { els[k].style.backgroundColor = rgb(col); });
+    },
+    place(x, y, sz) {
+      if (sz < 0.5) { for (const el of [pic, lum, ...els]) move(el, -9999, -9999); return null; }
+      const left = snap(x - W / 2), top = snap(y - H / 2);
+      for (const el of [pic, lum, ...els]) move(el, left, top);
+      return null; // the picture differs from moment to moment, so overlays can't pre-correct for it
+    },
+    destroy() { [pic, lum, ...els].forEach((el) => el.remove()); },
   };
 }
 
@@ -357,17 +507,34 @@ function createMedia(opt, pal, areaPalette) {
   // visibility, not a zero-size clip: WebKit treats circle(0) as "no clip"
   function hide(it) { if (it.overlay && it.shown) { it.overlay.style.visibility = 'hidden'; it.shown = false; } }
 
-  function update(x, y, r) {
+  function update(reveal) {
     active = 0;
     for (const it of visible) {
       if (!it.overlay) continue;
+      if (!reveal) { hide(it); continue; }
       const b = it.el.getBoundingClientRect();
-      const hit = r > 0.5 && x + r > b.left && x - r < b.right && y + r > b.top && y - r < b.bottom;
+      const box = reveal.kind === 'circle'
+        ? [reveal.x - reveal.r, reveal.y - reveal.r, reveal.x + reveal.r, reveal.y + reveal.r]
+        : [reveal.left, reveal.top, reveal.left + reveal.w, reveal.top + reveal.h];
+      const hit = box[2] - box[0] > 0.5 && box[2] > b.left && box[0] < b.right && box[3] > b.top && box[1] < b.bottom;
       if (!hit) { hide(it); continue; }
       const key = `${it.el.offsetLeft},${it.el.offsetTop},${it.el.offsetWidth},${it.el.offsetHeight}`;
       if (key !== it.key) sync(it);
-      it.overlay.style.clipPath = `circle(${r}px at ${x - b.left}px ${y - b.top}px)`;
-      if (!it.shown) { it.overlay.style.visibility = 'visible'; it.shown = true; }
+      const st = it.overlay.style;
+      if (reveal.kind === 'circle') {
+        st.clipPath = `circle(${reveal.r}px at ${reveal.x - b.left}px ${reveal.y - b.top}px)`;
+      } else {
+        st.clipPath = 'none';
+        if (it.maskUrl !== reveal.url) {
+          it.maskUrl = reveal.url;
+          for (const p of ['maskImage', 'webkitMaskImage']) st[p] = `url("${reveal.url}")`;
+          for (const p of ['maskRepeat', 'webkitMaskRepeat']) st[p] = 'no-repeat';
+          for (const p of ['maskSize', 'webkitMaskSize']) st[p] = `${reveal.w}px ${reveal.h}px`;
+        }
+        const mp = `${reveal.left - b.left}px ${reveal.top - b.top}px`;
+        st.maskPosition = mp; st.webkitMaskPosition = mp;
+      }
+      if (!it.shown) { st.visibility = 'visible'; it.shown = true; }
       if (it.video) { it.video.draw(); active++; }
     }
   }

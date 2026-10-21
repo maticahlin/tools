@@ -38,7 +38,11 @@
     await new Promise((r) => { v.addEventListener('seeked', r, { once: true }); v.addEventListener('loadeddata', () => { v.currentTime = 1; }, { once: true }); });
   }
   const palette = JSON.parse(q.get('p') || '{}');
-  window.__dm = diffmap({ palette, force: true, ease: 1, size: Number(q.get('size') || 260), grow: false, transition: 0, position: q.get('pos') || 'auto' });
+  const cur = q.get('cur');
+  const cursor = cur === 'text' ? { text: 'Diff', font: '900 150px Arial, Helvetica, sans-serif' }
+    : cur === 'image' ? { image: 'paint.png', width: 240, height: 180 } : null;
+  window.__dm = diffmap({ palette, cursor, force: true, ease: 1, size: Number(q.get('size') || 260), grow: false, transition: 0, position: q.get('pos') || 'auto' });
+  window.__layerRect = () => { const r = document.querySelector('[data-diffmap-layer="multiply"]').getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
   // synthetic pointer events, same in every driver
   window.__move = (x, y) => {
     const t = document.elementFromPoint(x, y) || document.body;

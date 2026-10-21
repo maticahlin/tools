@@ -200,6 +200,41 @@ export function layers({ A, B }, { duotone = false } = {}) {
   return out;
 }
 
+// ---------------------------------------------------------------- soft edges
+//
+// A pixel half-covered by every layer is not "half the effect": blend layers don't compose
+// linearly, so anti-aliased rims come out as a colored fringe. Instead the layers stay fully
+// opaque and the *strength* t of the effect fades to 0 at the rim:
+//   F_t(c) = c + t·(F(c) − c)  →  A_t = t·A,  D_t = 1 − t + t·D
+// That is still a per-channel affine map, so the same 3 layers render it exactly. At t = 0
+// the layers are white/white/white, an exact no-op, so whatever surrounds them doesn't matter.
+
+/** Layer colors [multiply, difference X, difference M] at effect strength t (0..1). */
+export function layersAt({ A, B }, t) {
+  const m = [0, 0, 0], X = [0, 0, 0], M = [0, 0, 0];
+  for (let i = 0; i < 3; i++) {
+    const d = 1 - t + t * (B[i] - A[i]);
+    const a = t * A[i];
+    const up = d > 0;
+    m[i] = Math.abs(d); X[i] = up ? 1 - a : a; M[i] = up ? 1 : 0;
+  }
+  return [m, X, M];
+}
+
+/**
+ * Where the layer colors change branch as t goes 1 → 0 (one per inverting channel).
+ * Between these points every layer color is linear in t, so a CSS gradient with stops
+ * here (and at 0 and 1) reproduces F_t exactly.
+ */
+export function rampBreaks({ A, B }) {
+  const ts = [];
+  for (let i = 0; i < 3; i++) {
+    const D = B[i] - A[i];
+    if (D < 0) { const tc = 1 / (1 - D); if (tc < 1 - 1e-9) ts.push(tc); }
+  }
+  return [...new Set(ts)].sort((a, b) => b - a);
+}
+
 /**
  * Everything the runtime needs from a user config, resolved once.
  * @param {DiffmapPalette} palette
