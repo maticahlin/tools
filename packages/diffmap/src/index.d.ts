@@ -29,7 +29,7 @@ export type Palette = DifferencePalette | SwapPalette | DuotonePalette;
 
 export type Cursor =
   | null
-  | { text: string; font?: string; lineHeight?: number; maxWidth?: number; align?: 'left' | 'center' | 'right' }
+  | { text: string; font?: string; lineHeight?: number; maxWidth?: number; align?: 'left' | 'center' | 'right'; smoothing?: 'antialiased' | 'native' }
   | { image: string; width?: number; height?: number };
 
 export interface DiffmapOptions {

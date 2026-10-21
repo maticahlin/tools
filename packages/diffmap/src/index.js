@@ -332,6 +332,7 @@ function textShape(cursor, { mkLayer, move, space, kick = () => {} }) {
   const lineHeight = cursor.lineHeight ?? 1.2;
   const maxWidth = cursor.maxWidth ?? Infinity;
   const align = cursor.align ?? 'center';
+  const smoothing = cursor.smoothing ?? 'antialiased'; // 'antialiased' matches -webkit-font-smoothing: antialiased; 'native' = the canvas's own
   const lum = mkLayer('color');
   lum.style.backgroundColor = '#808080';
   const set = layerSet(mkLayer);
@@ -367,14 +368,37 @@ function textShape(cursor, { mkLayer, move, space, kick = () => {} }) {
     const pad = Math.ceil(px * 0.25);
     const Wcss = Math.max(...widths) + 2 * pad, Hcss = lh * ls.length + 2 * pad;
     const w = Math.ceil(Wcss * k), h = Math.ceil(Hcss * k);
-    c.width = w; c.height = h;
-    ctx.scale(k, k);
+    // Glyphs are drawn at `ss`× and box-filtered down. Canvas text on macOS gets the system's heavier
+    // font smoothing, so a 1:1 bitmap looks bolder than page text set with -webkit-font-smoothing:
+    // antialiased. Supersampled, that extra smoothing averages out, leaving the plain coverage that
+    // 'antialiased' (and Windows grayscale text) draws.
+    // Measured with a 16px web font on a Retina Mac: 1:1 = 21.8% more ink than the true shapes,
+    // 3× = 7.5%, 6× ≈ the shapes. The extra smoothing is a fixed fraction of a device pixel, so small
+    // text needs more supersampling and big text barely any.
+    const devPx = px * k;
+    const ss = smoothing === 'native' ? 1 : devPx <= 48 ? 6 : devPx <= 120 ? 4 : 2;
+    c.width = w * ss; c.height = h * ss;
+    ctx.scale(k * ss, k * ss);
     ctx.font = font; ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
     ls.forEach((l, i) => {
       const x = align === 'left' ? pad : align === 'right' ? Wcss - pad - widths[i] : (Wcss - widths[i]) / 2;
       ctx.fillText(l, x, pad + lh * (i + 0.5));
     });
-    glyphs = { cov: ctx.getImageData(0, 0, w, h).data, w, h, W: w / k, H: h / k, maskUrl: c.toDataURL() };
+    const big = ctx.getImageData(0, 0, w * ss, h * ss).data;
+    const cov = new Uint8ClampedArray(w * h * 4);
+    const W2 = w * ss, n = ss * ss;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let dy = 0; dy < ss; dy++) {
+        let i = ((y * ss + dy) * W2 + x * ss) * 4 + 3;
+        for (let dx = 0; dx < ss; dx++, i += 4) sum += big[i];
+      }
+      const o = (y * w + x) * 4;
+      cov[o] = cov[o + 1] = cov[o + 2] = 255; cov[o + 3] = sum / n + 0.5;
+    }
+    const m = Object.assign(document.createElement('canvas'), { width: w, height: h });
+    m.getContext('2d').putImageData(new ImageData(cov, w, h), 0, 0);
+    glyphs = { cov, w, h, W: w / k, H: h / k, maskUrl: m.toDataURL() };
   }
 
   // Bitmaps are PNG-encoded with toBlob (async, mostly off the main thread); the new geometry
