@@ -1,4 +1,4 @@
-# diffmap
+# diffmaps
 
 A difference cursor whose colors you control.
 
@@ -8,7 +8,7 @@ The classic `mix-blend-mode: difference` cursor inverts whatever is under it —
 - **Any content.** Text, images, video, text over images, images over images.
 - **Every major browser.** Chrome, Edge, Firefox, Safari on Windows, macOS and Linux. No canvas screenshots of the page, no html2canvas.
 - **Small.** No dependencies; 11.5 KB gzipped (26 KB minified), and only 4 KB if you just need the color math (`/core`).
-- **Agent-friendly setup.** `npx @maticahlin/diffmap setup` opens a local editor; flags let coding agents do it without a browser.
+- **Agent-friendly setup.** `npx diffmaps setup` opens a local editor; flags let coding agents do it without a browser.
 
 ## The case that started it: brand red ↔ white
 
@@ -47,12 +47,12 @@ Status: confirmed on a real Mac: Safari 27 blends in Display P3, and diffmap's P
 ## Quick start
 
 ```sh
-npx @maticahlin/diffmap setup     # pick colors in your browser → diffmap.config.json
-npm i @maticahlin/diffmap
+npx diffmaps setup     # pick colors in your browser → diffmap.config.json
+npm i diffmaps
 ```
 
 ```js
-import { diffmap } from '@maticahlin/diffmap';
+import { diffmap } from 'diffmaps';
 import config from './diffmap.config.json';
 
 diffmap(config);
@@ -64,7 +64,9 @@ Mark the images and videos that should get the full color map:
 <img src="hero.jpg" data-diffmap alt="…">
 ```
 
-No bundler? `npx @maticahlin/diffmap vendor public/diffmap` copies the runtime and prints the `<script>` tag to paste.
+No bundler? `npx diffmaps vendor public/diffmap` copies the runtime and prints the `<script>` tag to paste.
+
+diffmaps is an ES module (`import`, not `require`), which is what Next, Vite, Astro, SvelteKit and plain `<script type="module">` all use. Call it in the browser only, e.g. inside `useEffect`.
 
 ## How it works
 
@@ -139,20 +141,20 @@ cursor.inspect();     // { mode, media: [{ el, state }] } — ready, working, ta
 cursor.destroy();
 ```
 
-`import { resolvePalette, lookup, fitToRange, PRESETS } from '@maticahlin/diffmap/core'` gives you the color math without the DOM.
+`import { resolvePalette, lookup, fitToRange, PRESETS } from 'diffmaps/core'` gives you the color math without the DOM.
 
 ## CLI
 
 ```
-diffmap setup                      editor on localhost; "Save to project" writes the config and exits
-diffmap setup --preset riso --anchors "#111,#fff"
-diffmap setup --nodes '{"red":"#ffd400"}'      unset nodes keep their current value
-diffmap setup --duotone "#1a1aff,#ff5a36"
-diffmap setup --swap "#ff1408,#fff" --text ""   brand red ↔ white, hover labels from data-diffmap-text
-diffmap setup --text "hello"                   cursor shapes: --text, --image <url> --width <px>, --circle
-diffmap check [--json]             how exact the saved palette renders
-diffmap vendor <dir>               copy the runtime for sites without a bundler
-diffmap add-command                add /diffmap-setup to Claude Code (.claude/commands)
+diffmaps setup                      editor on localhost; "Save to project" writes the config and exits
+diffmaps setup --preset riso --anchors "#111,#fff"
+diffmaps setup --nodes '{"red":"#ffd400"}'      unset nodes keep their current value
+diffmaps setup --duotone "#1a1aff,#ff5a36"
+diffmaps setup --swap "#ff1408,#fff" --text ""   brand red ↔ white, hover labels from data-diffmap-text
+diffmaps setup --text "hello"                   cursor shapes: --text, --image <url> --width <px>, --circle
+diffmaps check [--json]             how exact the saved palette renders
+diffmaps vendor <dir>               copy the runtime for sites without a bundler
+diffmaps add-command                add /diffmap-setup to Claude Code (.claude/commands)
 ```
 
 Coding agents: see [AGENTS.md](./AGENTS.md).

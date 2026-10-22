@@ -1,11 +1,11 @@
 {
-  "name": "@maticahlin/diffmap",
+  "name": "diffmaps",
   "version": "0.1.0",
   "description": "A difference-blend cursor whose colors you control. Text, images and video, every major browser.",
   "type": "module",
   "license": "MIT",
   "author": "Matic Ahlin (https://tools.maticahlin.com)",
-  "homepage": "https://tools.maticahlin.com/diffmap",
+  "homepage": "https://tools.maticahlin.com/diffmaps",
   "keywords": [
     "cursor",
     "mix-blend-mode",
@@ -28,19 +28,21 @@
   },
   "main": "./src/index.js",
   "bin": {
+    "diffmaps": "./bin/diffmap.js",
     "diffmap": "./bin/diffmap.js"
   },
   "files": [
-    "src",
-    "dist",
-    "bin",
-    "setup/index.html",
-    "setup/dusk.jpg",
-    "setup/temeraire.jpg",
-    "agents",
     "AGENTS.md",
+    "CHANGELOG.md",
+    "LICENSE",
     "README.md",
-    "LICENSE"
+    "agents",
+    "bin",
+    "dist",
+    "setup/dusk.jpg",
+    "setup/index.html",
+    "setup/temeraire.jpg",
+    "src"
   ],
   "sideEffects": true,
   "engines": {
@@ -54,5 +56,13 @@
     "bench": "node test/bench.mjs chromium",
     "prepublishOnly": "npm run build && npm test"
   },
-  "types": "./src/index.d.ts"
+  "types": "./src/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maticahlin/tools.git",
+    "directory": "packages/diffmap"
+  },
+  "bugs": {
+    "url": "https://github.com/maticahlin/tools/issues"
+  }
 }

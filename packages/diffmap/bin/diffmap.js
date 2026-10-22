@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // diffmap CLI — zero dependencies.
 //
-//   npx @maticahlin/diffmap setup              open the palette editor on localhost, save the config
-//   npx @maticahlin/diffmap setup --preset riso --anchors "#111,#fff"   write a config without a browser
-//   npx @maticahlin/diffmap check              print how well the saved palette works
-//   npx @maticahlin/diffmap vendor public/js   copy the runtime for sites without a bundler
-//   npx @maticahlin/diffmap add-command        add a /diffmap-setup command for Claude Code
+//   npx diffmaps setup              open the palette editor on localhost, save the config
+//   npx diffmaps setup --preset riso --anchors "#111,#fff"   write a config without a browser
+//   npx diffmaps check              print how well the saved palette works
+//   npx diffmaps vendor public/js   copy the runtime for sites without a bundler
+//   npx diffmaps add-command        add a /diffmap-setup command for Claude Code
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -38,14 +38,14 @@ const die = (msg) => { console.error(`diffmap: ${msg}`); process.exit(1); };
 // ------------------------------------------------------------------ commands
 const commands = {
   help() {
-    console.log(`diffmap ${version} — a difference cursor with your colors
+    console.log(`diffmaps ${version} — a difference cursor with your colors
 
 Usage
-  diffmap setup                     Open the palette editor in your browser and save the config
-  diffmap setup [palette flags]     Write the config directly, no browser (for agents and CI)
-  diffmap check                     Show how exactly the saved palette can be rendered
-  diffmap vendor <dir>              Copy the runtime into <dir> for sites without a bundler
-  diffmap add-command               Add a /diffmap-setup slash command for Claude Code
+  diffmaps setup                     Open the palette editor in your browser and save the config
+  diffmaps setup [palette flags]     Write the config directly, no browser (for agents and CI)
+  diffmaps check                     Show how exactly the saved palette can be rendered
+  diffmaps vendor <dir>              Copy the runtime into <dir> for sites without a bundler
+  diffmaps add-command               Add a /diffmap-setup slash command for Claude Code
 
 Palette flags (any of these skips the browser)
   --preset <name>                   ${Object.keys(PRESETS).join(', ')}

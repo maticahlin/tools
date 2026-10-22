@@ -4,7 +4,7 @@ Small, dependency-free building blocks for websites — the things we kept rebui
 
 | Package | What it does |
 | --- | --- |
-| [`@maticahlin/diffmap`](packages/diffmap) | A difference-blend cursor whose colors you control, on text, images and video, in every major browser. |
+| [`diffmaps`](packages/diffmap) | A difference-blend cursor whose colors you control, on text, images and video, in every major browser. |
 
 More to come: page transitions and layout blocks.
 

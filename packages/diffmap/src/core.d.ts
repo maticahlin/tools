@@ -1,4 +1,4 @@
-// Types for @maticahlin/diffmap/core — the color math, no DOM.
+// Types for diffmaps/core — the color math, no DOM.
 import type { Palette, Color, Corner } from './index.js';
 
 export type RGB = [number, number, number] | number[];
