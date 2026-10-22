@@ -28,8 +28,8 @@
   },
   "main": "./src/index.js",
   "bin": {
-    "diffmaps": "./bin/diffmap.js",
-    "diffmap": "./bin/diffmap.js"
+    "diffmaps": "bin/diffmap.js",
+    "diffmap": "bin/diffmap.js"
   },
   "files": [
     "AGENTS.md",
