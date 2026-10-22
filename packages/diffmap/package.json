@@ -1,5 +1,5 @@
 {
-  "name": "diffmaps",
+  "name": "@maticahlin/diffmaps",
   "version": "0.1.0",
   "description": "A difference-blend cursor whose colors you control. Text, images and video, every major browser.",
   "type": "module",
@@ -64,5 +64,8 @@
   },
   "bugs": {
     "url": "https://github.com/maticahlin/tools/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

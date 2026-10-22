@@ -13,36 +13,36 @@ Typical asks: "add the diffmap cursor", "set up diffmap", "difference cursor in 
 2. **Make the palette.** Pick one:
    - The user is at the keyboard and wants to choose colors → run the editor and wait. It opens a page on localhost, the user presses "Save to project", and the command exits:
      ```sh
-     npx diffmaps setup
+     npx @maticahlin/diffmaps setup
      ```
    - The user already gave colors, or you are running unattended → write the config directly:
      ```sh
-     npx diffmaps setup --preset ultramarine --anchors "#111111,#ffffff"
-     npx diffmaps setup --nodes '{"black":"#f4efe6","white":"#141414","red":"#ffd400"}' --anchors "#111,#fff"
-     npx diffmaps setup --duotone "#1a1aff,#ff5a36"
-     npx diffmaps setup --swap "#ff1408,#ffffff"      # brand color ↔ white, exact
+     npx @maticahlin/diffmaps setup --preset ultramarine --anchors "#111111,#ffffff"
+     npx @maticahlin/diffmaps setup --nodes '{"black":"#f4efe6","white":"#141414","red":"#ffd400"}' --anchors "#111,#fff"
+     npx @maticahlin/diffmaps setup --duotone "#1a1aff,#ff5a36"
+     npx @maticahlin/diffmaps setup --swap "#ff1408,#ffffff"      # brand color ↔ white, exact
      ```
    If the site is essentially two colors (a brand color on white, or text color on background) and the user wants them to trade places under the cursor, use `--swap` with exactly those two colors.
    Both write `diffmap.config.json` in the current directory (`--out` to change it). Add `--json` to get a machine-readable report.
 
-3. **Read the report.** `npx diffmaps check --json` returns how exact the palette is:
+3. **Read the report.** `npx @maticahlin/diffmaps check --json` returns how exact the palette is:
    - `anchors[].offBy` should be 0–1. If not, tell the user which site color can't be matched and why (their nodes don't lie on a straight line per channel).
    - `imagesOffBy` above ~4 means some node colors fall outside what the black/white nodes span. Mention it; it's a design choice, not an error.
 
 4. **Install and start it.**
    - With a bundler (Vite, Next, Astro, SvelteKit, …):
      ```sh
-     npm i diffmaps
+     npm i @maticahlin/diffmaps
      ```
      ```js
-     import { diffmap } from 'diffmaps';
+     import { diffmap } from '@maticahlin/diffmaps';
      import config from './diffmap.config.json'; // move the file next to the code that imports it
      diffmap(config);
      ```
      In React/Next, call it in a client-only effect and clean up: `useEffect(() => diffmap(config).destroy, [])`. Never call it during server rendering.
    - Without a bundler (plain HTML, WordPress, Webflow embed):
      ```sh
-     npx diffmaps vendor public/diffmap
+     npx @maticahlin/diffmaps vendor public/diffmap
      ```
      then add the printed `<script type="module" …>` tag before `</body>` and serve `diffmap.config.json` from the site root.
 

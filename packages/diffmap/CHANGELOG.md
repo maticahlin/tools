@@ -2,7 +2,7 @@
 
 ## 0.1.0 — 2026-10-22
 
-First release.
+First release, published as `@maticahlin/diffmaps` (npm declined plain `diffmaps` as too similar to `diff-maps`).
 
 - Difference cursor with 8 editable color nodes; images and video get the full node map, page content the closest per-channel match.
 - `swap` mode: two colors trade places exactly (brand color ↔ white).

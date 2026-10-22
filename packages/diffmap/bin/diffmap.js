@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // diffmap CLI — zero dependencies.
 //
-//   npx diffmaps setup              open the palette editor on localhost, save the config
-//   npx diffmaps setup --preset riso --anchors "#111,#fff"   write a config without a browser
-//   npx diffmaps check              print how well the saved palette works
-//   npx diffmaps vendor public/js   copy the runtime for sites without a bundler
-//   npx diffmaps add-command        add a /diffmap-setup command for Claude Code
+//   npx @maticahlin/diffmaps setup              open the palette editor on localhost, save the config
+//   npx @maticahlin/diffmaps setup --preset riso --anchors "#111,#fff"   write a config without a browser
+//   npx @maticahlin/diffmaps check              print how well the saved palette works
+//   npx @maticahlin/diffmaps vendor public/js   copy the runtime for sites without a bundler
+//   npx @maticahlin/diffmaps add-command        add a /diffmap-setup command for Claude Code
 
 import http from 'node:http';
 import fs from 'node:fs';

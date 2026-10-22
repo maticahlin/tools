@@ -8,7 +8,7 @@ The classic `mix-blend-mode: difference` cursor inverts whatever is under it —
 - **Any content.** Text, images, video, text over images, images over images.
 - **Every major browser.** Chrome, Edge, Firefox, Safari on Windows, macOS and Linux. No canvas screenshots of the page, no html2canvas.
 - **Small.** No dependencies; 11.5 KB gzipped (26 KB minified), and only 4 KB if you just need the color math (`/core`).
-- **Agent-friendly setup.** `npx diffmaps setup` opens a local editor; flags let coding agents do it without a browser.
+- **Agent-friendly setup.** `npx @maticahlin/diffmaps setup` opens a local editor; flags let coding agents do it without a browser.
 
 ## The case that started it: brand red ↔ white
 
@@ -47,12 +47,12 @@ Status: confirmed on a real Mac: Safari 27 blends in Display P3, and diffmap's P
 ## Quick start
 
 ```sh
-npx diffmaps setup     # pick colors in your browser → diffmap.config.json
-npm i diffmaps
+npx @maticahlin/diffmaps setup     # pick colors in your browser → diffmap.config.json
+npm i @maticahlin/diffmaps
 ```
 
 ```js
-import { diffmap } from 'diffmaps';
+import { diffmap } from '@maticahlin/diffmaps';
 import config from './diffmap.config.json';
 
 diffmap(config);
@@ -64,7 +64,7 @@ Mark the images and videos that should get the full color map:
 <img src="hero.jpg" data-diffmap alt="…">
 ```
 
-No bundler? `npx diffmaps vendor public/diffmap` copies the runtime and prints the `<script>` tag to paste.
+No bundler? `npx @maticahlin/diffmaps vendor public/diffmap` copies the runtime and prints the `<script>` tag to paste.
 
 diffmaps is an ES module (`import`, not `require`), which is what Next, Vite, Astro, SvelteKit and plain `<script type="module">` all use. Call it in the browser only, e.g. inside `useEffect`.
 
@@ -141,7 +141,7 @@ cursor.inspect();     // { mode, media: [{ el, state }] } — ready, working, ta
 cursor.destroy();
 ```
 
-`import { resolvePalette, lookup, fitToRange, PRESETS } from 'diffmaps/core'` gives you the color math without the DOM.
+`import { resolvePalette, lookup, fitToRange, PRESETS } from '@maticahlin/diffmaps/core'` gives you the color math without the DOM.
 
 ## CLI
 

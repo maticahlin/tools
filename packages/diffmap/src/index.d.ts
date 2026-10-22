@@ -1,4 +1,4 @@
-// Types for diffmaps
+// Types for @maticahlin/diffmaps
 
 export type Color = string; // '#rrggbb', '#rgb' or 'rgb(r, g, b)'
 export type Corner = 'black' | 'red' | 'green' | 'blue' | 'yellow' | 'magenta' | 'cyan' | 'white';
